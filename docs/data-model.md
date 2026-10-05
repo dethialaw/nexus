@@ -1,6 +1,6 @@
 # Modèle de données
 
-État au 5 octobre 2026, dérivé de [`CONTEXT.md`](../CONTEXT.md) (vocabulaire et noms de code) et des ADR [0001](adr/0001-contenu-historise-par-copie.md) à [0004](adr/0004-modele-d-embeddings-cloud-et-recalculable.md). PostgreSQL (Neon) + pgvector, SQLAlchemy 2 async + Alembic.
+État au 5 octobre 2026, dérivé de [`CONTEXT.md`](../CONTEXT.md) (vocabulaire et noms de code) et des ADR [0001](adr/0001-contenu-historise-par-copie.md) à [0005](adr/0005-coeur-metier-adaptateurs-et-instantanes-gardes.md). PostgreSQL (Neon) + pgvector, SQLAlchemy 2 async (ORM déclaratif) + Alembic.
 
 ## Conventions
 
@@ -10,7 +10,9 @@
 - **Vecteurs** : `vector(768)`, produits par `gemini-embedding-2`. Chaque vecteur est accompagné de `embedding_model` (obligatoire) et de `embedding_kind` (`document` | `query`). On ne compare jamais deux vecteurs dont `embedding_model` diffère.
 - **Copie plutôt que référence** pour tout contenu historisé (ADR-0001) : les liens vers `article` sont facultatifs et passent à `NULL` à la purge.
 - **Rien de privé dans un objet commun** (ADR-0003) : les tables communes (`source`, `article`, `same_event_judgment`) ne portent aucune donnée d'interaction.
-- **Relations ORM** : `lazy="raise"` partout.
+- **Relations ORM** : `lazy="raise"` partout ; sessions en `expire_on_commit=False`.
+- **Persistance** (ADR-0005) : modèles ORM déclaratifs dans l'adaptateur, mappés explicitement vers des dataclasses `frozen` du cœur ; un `TypeDecorator` convertit les vecteurs en `tuple[float, ...]`, numpy n'atteint jamais le cœur. Écritures idempotentes par `INSERT … ON CONFLICT DO NOTHING`.
+- **Tables gardées** (ADR-0005) : aucune mise à jour sur `entry`, `citation`, `interest_version`, `message`, `signal`, `same_event_judgment`, `relevance_score` et `briefing_composition`, sauf une clé étrangère qui passe à NULL lors d'une purge (`entry.article_id`, `citation.article_id`, `briefing_composition.execution_id`) ; `briefing` n'est mis à jour que s'il est `failed`. Garde ORM + trigger générique en base.
 - **Nom des tables** : le nom de code de `CONTEXT.md`, sauf `app_user` (`USER` est un mot réservé de PostgreSQL).
 
 ## Tables
@@ -100,7 +102,7 @@ PK (`user_id`, `article_id`, `interest_version_id`). La Pertinence globale (le m
 
 ### Exécution et livraison
 
-**`execution`** : `id`, `started_at`, `finished_at`, `result` CHECK (`success`, `partial`, `failed`), `failure_cause` CHECK (`technical`, `collection`) NULL, `error_detail` NULL.
+**`execution`** : `id`, `started_at`, `finished_at`, `result` CHECK (`success`, `partial`, `failed`), `failure_cause` CHECK (`technical`, `collection`) NULL, `error_detail` NULL, `anomalies` jsonb (défaut `[]`) : avertissements qui ne font pas échouer l'Exécution, par exemple `[{"kind": "catalog_sync_blocked", "detail": …}]`.
 
 **`source_collection`** : `id`, `execution_id` (FK, CASCADE), `source_id` (FK), `result` CHECK (`success`, `failed`), `article_count`, `error_detail`, `started_at`, `finished_at`.
 
@@ -143,7 +145,7 @@ Contrainte : **UNIQUE partiel (`user_id`, `article_id`) WHERE `article_id IS NOT
 
 **`conversation`** : `id`, `user_id` (FK, CASCADE), `created_at`.
 
-**`message`** : `id`, `conversation_id` (FK, CASCADE), `role` CHECK (`user`, `assistant`), `content`, `created_at`.
+**`message`** : `id`, `conversation_id` (FK, CASCADE), `role` CHECK (`user`, `assistant`), `content`, `created_at`. En ajout seul : la réponse de l'agent, streamée en SSE, est enregistrée en une fois à la fin du flux (ou à l'interruption, avec ce qui a été généré), jamais créée vide puis complétée.
 
 **`citation`** : `id`, `message_id` (FK, CASCADE), `position`, `kind` CHECK (`article`, `followed_page`), `title`, `url`, `source_name` (nom de la Source ou du site), `article_id` NULL (FK, SET NULL).
 
@@ -153,7 +155,7 @@ Contrainte : **UNIQUE partiel (`user_id`, `article_id`) WHERE `article_id IS NOT
 |---|---|
 | Purge quotidienne : Article collecté il y a plus de 30 jours | supprime `relevance_score` et `same_event_judgment` (CASCADE) ; `entry.article_id` et `citation.article_id` passent à NULL |
 | Purge : Exécution de plus de 90 jours | supprime ses `source_collection` (CASCADE) ; `briefing_composition.execution_id` passe à NULL (les Compositions restent) |
-| Source retirée du Catalogue | jamais supprimée : `is_active = false`, `deactivation_reason = removed_from_catalog` |
+| Source retirée du Catalogue (inscrite dans `[[retired]]`) | jamais supprimée : si elle est active, `is_active = false`, `deactivation_reason = removed_from_catalog` ; si elle est déjà inactive, elle garde sa raison d'origine |
 | Suppression d'un Intérêt | `interest.deleted_at` + ligne `interest_version` de type `deleted` ; rien n'est effacé |
 | Suppression d'un Utilisateur (`app_user`) | CASCADE sur toutes ses données personnelles, y compris `relevance_score` (voir Points ouverts pour ses Sources privées) |
 
@@ -191,15 +193,22 @@ Contrainte : **UNIQUE partiel (`user_id`, `article_id`) WHERE `article_id IS NOT
 23. **`relevance_score.user_id` et `interest_version_id` en clés étrangères CASCADE** : aucune donnée orpheline à la suppression d'un Utilisateur.
 24. **CHECK (`is_active = (deactivation_reason IS NULL)`) sur `source`** : une Source inactive dit toujours pourquoi, et une Source active n'a pas de raison de désactivation.
 
+### Tour 4 : cadrage du squelette
+25. **Cœur métier / adaptateurs, persistance par ORM déclaratif + mapping vers des dataclasses `frozen`** (ADR-0005) : le cœur se teste sans infrastructure, et l'immuabilité est garantie par le type.
+26. **Gardes d'immuabilité sur trois couches** (type, ORM, trigger générique comparant la ligne en jsonb) sur les tables d'instantanés et en ajout seul ; seule exception, une clé étrangère qui passe à NULL lors d'une purge (ADR-0005) : sinon la purge des Articles échouerait.
+27. **`execution.anomalies` (jsonb)** : un avertissement (synchronisation du Catalogue bloquée) n'est pas un échec, mais doit rester visible dans la base, donc dans Grafana.
+28. **Synchronisation du Catalogue de Sources au début de chaque Exécution**, limitée aux Sources communes : `[[retired]]` désactive explicitement (seulement les Sources actives) ; une Source commune active absente des deux listes est une disparition inexpliquée ; au-delà de `max(3, 20 % des Sources communes actives)` disparitions, ou si le catalogue est vide, rien n'est appliqué et l'anomalie est inscrite. Une Source revenue au catalogue n'est réactivée que si sa raison est `removed_from_catalog`.
+
 ## Points ouverts
 
-### À inscrire dans `AGENTS.md` (à sa création)
-- **Contenu collecté = donnée, jamais instruction** : Extraits, Pages liées et pages suivies par l'agent sont traités comme des données non fiables (injection de prompt). Les outils de l'agent du chat restent **en lecture seule**.
-- **Limite de requêtes simultanées par domaine** lors de la récupération des Pages liées (en plus du délai, de la taille maximum et du respect de robots.txt).
-
 ### Chantier zéro
-- Test d'intégration contre Neon qui valide la configuration du pooler (`asyncpg`, `statement_cache_size=0`) ; migrations par l'URL directe.
-- Vérifier que `gemini-embedding-2` accepte bien 768 dimensions pour le texte ; sinon repli sur `001` avec une normalisation couverte par un test.
+- Test d'intégration contre Neon qui valide la configuration du pooler (`asyncpg`, `statement_cache_size=0`) ; migrations par l'URL directe. Prévu dans [`specs/0001-squelette-du-monorepo.md`](specs/0001-squelette-du-monorepo.md).
+- Vérifier que `gemini-embedding-2` accepte bien 768 dimensions pour le texte ; sinon repli sur `001` avec une normalisation couverte par un test. Prévu dans la même spec.
+
+### Grafana (session Déploiement)
+- **Ne pas empêcher la mise en veille de Neon** : le quota de calcul (100 CU-heures par mois) suppose que la base s'endort ; des requêtes de tableau de bord ou d'alerte trop fréquentes la garderaient éveillée.
+- **Rôle PostgreSQL en lecture seule, limité à des vues agrégées**, sans accès aux Signaux ni aux Conversations (ADR-0003).
+- **Proposition, à confirmer** : une règle d'alerte Grafana sur `execution.anomalies` et sur les Exécutions `failed` sert de canal d'alerte au mainteneur.
 
 ### Avant l'ouverture à l'entourage
 - Volume de `relevance_score` : passer probablement à « tout garder 7 jours, puis seulement le score de l'Intérêt explicatif ».
@@ -214,6 +223,9 @@ Contrainte : **UNIQUE partiel (`user_id`, `article_id`) WHERE `article_id IS NOT
 ### À trancher plus tard
 - Évaluer Jev (TypeSafe AI) pour la tâche `classify` (Nature avec sa probabilité, Jugement « même événement ») : simple choix de configuration de la passerelle.
 - Seuils à calibrer : similarité du pré-filtre de diversité, pertinence pour déclencher le résumé, confiance pour Inconnu, minimum d'Entrées pour l'Engagement et pour la Synthèse.
-- Heure par défaut du Briefing ; nombre N de Collectes échouées avant désactivation, et canal d'alerte.
+- Heure par défaut du Briefing ; nombre N de Collectes échouées avant désactivation ; canal d'alerte (proposition : Grafana, voir plus haut).
+- **Clé de `same_event_judgment`** : (`article_a_id`, `article_b_id`) et la garde interdisent de juger une même paire avec deux modèles ; avec `ON CONFLICT DO NOTHING`, le second jugement serait même ignoré sans erreur. Pour évaluer Jev contre Gemini, ajouter `model` à la clé.
+- **Forme de l'agent du chat** : graphe fixe (comprendre → récupérer → vérifier/reformuler → répondre) ou agent libre qui choisit ses outils (`follow_page` suppose au moins un choix d'outil par le LLM). L'ADR-0005 convient aux deux ; à trancher avec la spec du chat.
+- **Historique renvoyé au LLM** : sans checkpointer, l'historique est relu dans `message` à chaque question ; fixer une limite (N derniers messages ou résumé) avec la spec du chat.
 - Index vectoriel (HNSW) le jour où la latence l'exige.
 - Popularité dans la Source (points, votes) sur `article`, pour la future Entrée d'exploration.

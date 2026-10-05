@@ -6,7 +6,9 @@ Le domaine se dit en français, le code s'écrit en anglais : chaque terme indiq
 
 ## Language
 
-### Collecte
+### Ingestion
+
+De la Source à l'Article : Connecteurs, Sources, Collectes et Exécutions. Le titre de cette section n'est pas un terme ; son nom de code (`ingestion`) désigne la section dans le code, tandis que la Collecte reste la lecture d'une Source.
 
 **Connecteur**:
 Un type de provenance que Nexus sait lire (RSS, Hacker News, Reddit, plus tard X).
@@ -24,7 +26,7 @@ _Code_: `subscription`
 _Avoid_: suivi, follow
 
 **Catalogue de Sources**:
-La liste des Sources communes proposées à l'Utilisateur pour s'abonner, entretenue par le mainteneur de Nexus.
+La liste des Sources communes proposées à l'Utilisateur pour s'abonner, entretenue par le mainteneur de Nexus, avec la liste des Sources qu'il en a retirées.
 _Code_: `source_catalog`
 _Avoid_: annuaire, registre
 
