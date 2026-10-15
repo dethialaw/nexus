@@ -1,0 +1,11 @@
+# Source Catalog: common Sources offered to every User.
+#
+# To retire a Source: delete its [[source]] block AND add its key to [[retired]].
+# Sync rules: docs/specs/0001-squelette-du-monorepo.md (Catalogue de Sources).
+#
+# [[source]]
+# connector = "reddit"
+# subreddit = "python"
+#
+# [[retired]]
+# source_key = "reddit:python"
