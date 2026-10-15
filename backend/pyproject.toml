@@ -1,0 +1,113 @@
+[project]
+name = "nexus"
+version = "0.1.0"
+description = "Personal news-watch assistant: daily Briefing built from an interest profile."
+readme = "AGENTS.md"
+requires-python = ">=3.13"
+dependencies = [
+    "alembic>=1.16",
+    "asyncpg>=0.30",
+    "fastapi>=0.118",
+    "numpy>=2.2",
+    "pgvector>=0.4",
+    "pydantic>=2.11",
+    "pydantic-settings>=2.10",
+    "sqlalchemy[asyncio]>=2.0.40",
+    "uvicorn[standard]>=0.37",
+]
+
+[project.scripts]
+nexus-api = "nexus.entrypoints.api.__main__:main"
+nexus-batch = "nexus.entrypoints.batch.__main__:main"
+
+[dependency-groups]
+dev = [
+    "httpx2>=2.13.1",
+    "import-linter>=2.3",
+    "mypy>=1.18",
+    "pytest>=8.4",
+    "pytest-asyncio>=1.2",
+    "ruff>=0.13",
+]
+evals = []
+
+[build-system]
+requires = ["uv_build>=0.13.1,<0.14.0"]
+build-backend = "uv_build"
+
+[tool.uv]
+default-groups = ["dev"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "ASYNC", "S", "RUF", "PT"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]
+"alembic/versions/**" = ["E501"]
+
+[tool.mypy]
+strict = true
+plugins = ["pydantic.mypy"]
+files = ["src", "tests"]
+mypy_path = "src"
+explicit_package_bases = true
+
+[[tool.mypy.overrides]]
+module = ["pgvector.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+testpaths = ["tests"]
+markers = [
+    "integration: needs the local PostgreSQL + pgvector database",
+    "external: talks to Neon or Gemini with real secrets",
+]
+addopts = ["-m", "not external", "--strict-markers"]
+
+[tool.importlinter]
+root_package = "nexus"
+
+[[tool.importlinter.contracts]]
+name = "Core does not depend on adapters, entrypoints or composition"
+type = "forbidden"
+source_modules = ["nexus.core"]
+forbidden_modules = ["nexus.adapters", "nexus.entrypoints", "nexus.bootstrap", "nexus.settings"]
+
+[[tool.importlinter.contracts]]
+name = "Adapters do not depend on entrypoints or composition"
+type = "forbidden"
+source_modules = ["nexus.adapters"]
+forbidden_modules = ["nexus.entrypoints", "nexus.bootstrap"]
+
+[[tool.importlinter.contracts]]
+name = "Adapters are independent of each other"
+type = "independence"
+modules = [
+    "nexus.adapters.persistence",
+    "nexus.adapters.model_gateway",
+    "nexus.adapters.connectors",
+    "nexus.adapters.web",
+    "nexus.adapters.agent",
+    "nexus.adapters.tracing",
+    "nexus.adapters.source_catalog",
+]
+
+[[tool.importlinter.contracts]]
+name = "Core shared kernel imports no other core section"
+type = "forbidden"
+source_modules = ["nexus.core.shared"]
+forbidden_modules = [
+    "nexus.core.ingestion",
+    "nexus.core.qualification",
+    "nexus.core.profile",
+    "nexus.core.delivery",
+    "nexus.core.conversation",
+    "nexus.core.pipeline",
+]

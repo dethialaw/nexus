@@ -1,0 +1,44 @@
+{
+  "name": "nexus-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@12.11.2",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "next typegen && tsc --noEmit",
+    "test": "vitest run",
+    "gen:api": "cd ../backend && uv run python -m nexus.entrypoints.api.export_openapi > ../frontend/src/lib/api/openapi.json && cd ../frontend && openapi-typescript src/lib/api/openapi.json -o src/lib/api/schema.d.ts && prettier --write src/lib/api"
+  },
+  "dependencies": {
+    "next": "16.4.1",
+    "openapi-fetch": "^0.17.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/turbopack": "^4",
+    "@testing-library/jest-dom": "^6",
+    "@testing-library/react": "^16",
+    "@types/node": "^24",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@vitejs/plugin-react": "^5",
+    "eslint": "^9",
+    "eslint-config-next": "16.4.1",
+    "eslint-config-prettier": "^10",
+    "jsdom": "^27",
+    "openapi-typescript": "^7.13.0",
+    "prettier": "^3",
+    "tailwindcss": "^4",
+    "typescript": "^5",
+    "vitest": "^4"
+  }
+}
