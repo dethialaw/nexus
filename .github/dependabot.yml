@@ -1,9 +1,13 @@
 version: 2
+# Commit prefix "chore": pr-title.yml rejects Dependabot's default "build" type.
 updates:
   - package-ecosystem: uv
     directory: /backend
     schedule:
       interval: weekly
+    commit-message:
+      prefix: chore
+      include: scope
     groups:
       backend:
         patterns: ["*"]
@@ -11,13 +15,23 @@ updates:
     directory: /frontend
     schedule:
       interval: weekly
+    commit-message:
+      prefix: chore
+      include: scope
     groups:
       frontend:
         patterns: ["*"]
+    ignore:
+      # TypeScript 7 is not supported yet by typescript-eslint and openapi-typescript.
+      - dependency-name: typescript
+        versions: [">=7"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    commit-message:
+      prefix: chore
+      include: scope
     groups:
       actions:
         patterns: ["*"]
@@ -25,6 +39,9 @@ updates:
     directory: /backend
     schedule:
       interval: weekly
+    commit-message:
+      prefix: chore
+      include: scope
     groups:
       docker:
         patterns: ["*"]
