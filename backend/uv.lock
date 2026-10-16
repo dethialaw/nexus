@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = ">=3.13"
 resolution-markers = [
     "python_full_version >= '3.15'",
@@ -787,8 +787,8 @@ requires-dist = [
     { name = "pgvector", specifier = ">=0.4" },
     { name = "pydantic", specifier = ">=2.11" },
     { name = "pydantic-settings", specifier = ">=2.10" },
-    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.40" },
-    { name = "uvicorn", extras = ["standard"], specifier = ">=0.37" },
+    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.1.4" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.54.0" },
 ]
 
 [package.metadata.requires-dev]
