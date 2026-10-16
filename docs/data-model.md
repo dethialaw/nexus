@@ -216,6 +216,7 @@ Contrainte : **UNIQUE partiel (`user_id`, `article_id`) WHERE `article_id IS NOT
 - Identifiant public (non énumérable) pour les ressources exposées par l'API, si besoin.
 - Authentification.
 - Suppression d'un Utilisateur propriétaire de Sources privées : sort de ces Sources et de leurs Articles (actuellement `RESTRICT`).
+- Conditions d'utilisation des flux RSS de chaque éditeur du Catalogue : beaucoup les réservent à un usage personnel.
 
 ### Avant toute ouverture publique
 - Droits voisins des éditeurs de presse (stockage d'Extraits et de résumés).

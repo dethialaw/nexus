@@ -41,7 +41,7 @@ _Code_: `article`
 _Avoid_: item, élément, contenu, post
 
 **Page liée**:
-La page externe vers laquelle pointe un Article (le lien d'un post HN ou Reddit), récupérée une seule fois et sur un seul niveau pour en compléter l'Extrait.
+La page web vers laquelle pointe un Article (le lien d'un post HN ou Reddit, ou la page de l'article lui-même pour un Article RSS), récupérée une seule fois et sur un seul niveau pour en compléter l'Extrait.
 _Code_: `linked_page`
 _Avoid_: lien externe, cible
 
@@ -54,6 +54,11 @@ _Avoid_: contenu, corps, texte intégral
 La durée (30 jours) pendant laquelle un Article est conservé avant d'être purgé.
 _Code_: `retention_window`
 _Avoid_: TTL, durée de vie
+
+**Trace de purge**:
+Ce qui reste d'un Article après sa purge : de quoi le reconnaître, sans aucun contenu, conservé un an pour qu'un élément encore présent dans le flux de sa Source ne soit jamais collecté de nouveau.
+_Code_: `purged_article`
+_Avoid_: tombstone, archive
 
 **Exécution**:
 Un lancement du batch, avec son heure, son résultat et, en cas d'échec, sa cause (technique ou collecte). Elle est conservée même quand le Briefing qu'elle a raté est remplacé.
