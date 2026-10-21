@@ -73,14 +73,16 @@ class SourceRow(Base):
     is_active: Mapped[bool]
     deactivation_reason: Mapped[str | None] = mapped_column(Text)
     last_collected_at: Mapped[datetime | None] = mapped_column(Timestamp)
+    http_etag: Mapped[str | None] = mapped_column(Text)
+    http_last_modified: Mapped[str | None] = mapped_column(Text)
 
 
 class ArticleRow(Base):
     __tablename__ = "article"
     __table_args__ = (
         UniqueConstraint("source_id", "canonical_url"),
+        UniqueConstraint("source_id", "fingerprint"),
         Index(None, "collected_at"),
-        Index(None, "source_id", "fingerprint"),
         values_check("linked_page_status", LinkedPageStatus),
         values_check("excerpt_origin", ExcerptOrigin),
         values_check("nature", Nature),
@@ -108,6 +110,21 @@ class ArticleRow(Base):
     embedding_model: Mapped[str | None] = mapped_column(Text)
 
 
+class PurgedArticleRow(Base):
+    __tablename__ = "purged_article"
+    __table_args__ = (
+        Index(None, "source_id", "canonical_url"),
+        Index(None, "source_id", "fingerprint"),
+        Index(None, "purged_at"),
+    )
+
+    id: Mapped[int] = _id()
+    source_id: Mapped[int] = _fk("source.id", ondelete="RESTRICT")
+    canonical_url: Mapped[str] = mapped_column(Text)
+    fingerprint: Mapped[str] = mapped_column(Text)
+    purged_at: Mapped[datetime] = mapped_column(Timestamp)
+
+
 class SameEventJudgmentRow(Base):
     __tablename__ = "same_event_judgment"
     __table_args__ = (CheckConstraint("article_a_id < article_b_id", name="ordered_pair"),)
@@ -127,9 +144,11 @@ class AppUserRow(Base):
     __tablename__ = "app_user"
     __table_args__ = (
         CheckConstraint("briefing_hour BETWEEN 0 AND 23", name="briefing_hour_range"),
+        CheckConstraint("handle ~ '^[a-z0-9_-]{3,32}$'", name="handle_format"),
     )
 
     id: Mapped[int] = _id()
+    handle: Mapped[str] = mapped_column(Text, unique=True)
     timezone: Mapped[str] = mapped_column(Text)
     briefing_hour: Mapped[int] = mapped_column(SmallInteger)
     created_at: Mapped[datetime] = mapped_column(Timestamp)

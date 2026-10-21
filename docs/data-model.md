@@ -30,6 +30,8 @@
 | `is_active` | boolean | |
 | `deactivation_reason` | text NULL | CHECK (`maintainer`, `repeated_failures`, `removed_from_catalog`) ; **CHECK (`is_active = (deactivation_reason IS NULL)`)** |
 | `last_collected_at` | timestamptz NULL | sert de `since` au Connecteur |
+| `http_etag` | text NULL | validateur `ETag` de la dernière réponse, renvoyé en requête conditionnelle |
+| `http_last_modified` | text NULL | validateur `Last-Modified` de la dernière réponse |
 
 **`article`**
 | Colonne | Type | Notes |
@@ -39,7 +41,7 @@
 | `canonical_url` | text | pour HN et Reddit : le lien externe |
 | `discussion_url` | text NULL | page de commentaires HN ou Reddit |
 | `linked_url` | text NULL | URL de la Page liée |
-| `linked_page_status` | text | CHECK (`not_applicable`, `fetched`, `reused`, `failed`, `timeout`, `too_large`, `blocked_by_robots`) |
+| `linked_page_status` | text | CHECK (`not_applicable`, `pending`, `fetched`, `reused`, `failed`, `timeout`, `too_large`, `blocked_by_robots`) |
 | `excerpt` | text | plafonné à environ 3 000 caractères, sans HTML |
 | `excerpt_origin` | text | CHECK (`source`, `linked_page`, `both`) |
 | `title` | text | |
@@ -52,7 +54,18 @@
 | `embedding` | vector(768) NULL | `embedding_kind = document` ; NULL tant que la vectorisation n'a pas abouti |
 | `embedding_model` | text NULL | renseigné si et seulement si `embedding` l'est (CHECK) |
 
-Contraintes : **UNIQUE (`source_id`, `canonical_url`)** ; index sur `collected_at` ; index sur (`source_id`, `fingerprint`).
+Contraintes : **UNIQUE (`source_id`, `canonical_url`)** ; **UNIQUE (`source_id`, `fingerprint`)** ; index sur `collected_at`. `pending` : Page liée pas encore récupérée.
+
+**`purged_article`** (Trace de purge) : table commune, sans donnée d'Utilisateur (ADR-0003). Elle empêche un Article purgé de revenir.
+| Colonne | Type | Notes |
+|---|---|---|
+| `id` | bigint | PK |
+| `source_id` | bigint | FK `source` ON DELETE RESTRICT |
+| `canonical_url` | text | |
+| `fingerprint` | text | |
+| `purged_at` | timestamptz | base de la suppression des Traces après 365 jours |
+
+Index sur (`source_id`, `canonical_url`), sur (`source_id`, `fingerprint`) et sur `purged_at`.
 
 **Rattrapage (pipeline idempotent)** : à chaque Exécution, le pipeline complète les Articles encore en rétention auxquels il manque un embedding, une Nature ou un résumé (ce dernier seulement si l'Article remplit la condition de pertinence). Une étape qui échoue (quota, fournisseur indisponible) laisse la colonne à NULL au lieu de faire échouer la Collecte. Un Article sans embedding ne peut pas être scoré, donc il n'est pas Candidat tant qu'il n'a pas été complété.
 
@@ -67,7 +80,7 @@ Contraintes : **UNIQUE (`source_id`, `canonical_url`)** ; index sur `collected_a
 
 ### Profil
 
-**`app_user`** : `id`, `timezone` (nom IANA), `briefing_hour` (heure locale, smallint), `created_at`.
+**`app_user`** : `id`, `handle` (identifiant non personnel, **UNIQUE**, CHECK `^[a-z0-9_-]{3,32}$`), `timezone` (nom IANA), `briefing_hour` (heure locale, smallint), `created_at`.
 
 **`subscription`** : PK (`user_id`, `source_id`) ; `user_id` en ON DELETE CASCADE, `source_id` en RESTRICT ; `created_at`.
 

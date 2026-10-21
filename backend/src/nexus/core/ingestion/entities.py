@@ -21,6 +21,7 @@ class DeactivationReason(StrEnum):
 
 class LinkedPageStatus(StrEnum):
     NOT_APPLICABLE = "not_applicable"
+    PENDING = "pending"
     FETCHED = "fetched"
     REUSED = "reused"
     FAILED = "failed"
