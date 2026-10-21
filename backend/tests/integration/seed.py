@@ -39,7 +39,7 @@ class Seeded:
 
 
 async def seed(session: AsyncSession, *, briefing_status: str = "normal") -> Seeded:
-    user = AppUserRow(timezone="Europe/Paris", briefing_hour=7, created_at=NOW)
+    user = AppUserRow(handle="maintainer", timezone="Europe/Paris", briefing_hour=7, created_at=NOW)
     source = SourceRow(
         source_key="reddit:python",
         connector="reddit",
