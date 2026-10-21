@@ -57,7 +57,16 @@ Une nouvelle table d'instantané reçoit le trigger générique dans sa migratio
 
 ## Récupération web (`adapters/web/`)
 
-Pages liées (batch) et `follow_page` (agent) passent toutes deux par cet adaptateur, qui applique : délai maximal, taille maximale, robots.txt, un seul niveau de lien, et une **limite de requêtes simultanées par domaine**. Tout appel HTTP vers un site d'éditeur passe par lui.
+Tout appel HTTP vers un site d'éditeur (flux, Pages liées, `follow_page` de l'agent) passe par le port `HttpFetcher`, implémenté ici. Chaque appel déclare son **usage**, dont l'adaptateur déduit ses protections :
+- **HTTPS seulement** : une URL `http://` ou une redirection de HTTPS vers HTTP fait échouer l'appel.
+- **robots.txt** appliqué à tout usage sauf les flux, publiés pour être lus par des machines.
+- Délai maximal, taille maximale, un seul niveau de lien, une **requête à la fois par domaine**, User-Agent qui identifie Nexus.
+
+Une Source protégée contre les robots (403 anti-robots, seul un endpoint non annoncé répond) se **remplace** par une Source équivalente.
+
+## Analyse XML
+
+Tout XML collecté passe un **filtre préalable** sur les octets, avant tout analyseur : refus d'un encodage UTF-16 ou UTF-32 (BOM ou déclaration XML), puis de toute occurrence de `<!DOCTYPE` ou `<!ENTITY`, sans tenir compte de la casse, commentaires compris. Le filtre de feedparser se contourne par un commentaire, et seule la limite d'amplification d'expat resterait contre le billion laughs. Un refus est une Collecte échouée avec sa cause.
 
 ## Passerelle de modèles (`adapters/model_gateway/`)
 
