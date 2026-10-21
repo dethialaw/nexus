@@ -20,6 +20,7 @@ Docs en français ; code, identifiants, commentaires et messages de commit en an
 - GitHub Flow : une branche par tâche, depuis `main` à jour ; le mainteneur fusionne la PR.
 - Commits et titres de PR en Conventional Commits (`feat:`, `fix:`, `docs:`, `test:`, `refactor:`, `chore:`, `ci:`).
 - Une PR est prête quand toutes les vérifications locales du dossier touché passent (voir son `AGENTS.md`).
+- Tickets : issues GitHub ; pour en créer, lire, bloquer ou fermer un, suis `docs/agents/issue-tracker.md`.
 
 ## Docs à tenir à jour dans la même PR
 

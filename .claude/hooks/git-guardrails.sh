@@ -18,6 +18,11 @@ if grep -qE "${sp}git[[:space:]]+push" <<<"$command"; then
   [[ "$(git -C "${CLAUDE_PROJECT_DIR:-.}" branch --show-current 2>/dev/null)" == "main" ]] \
     && block "push while on main"
 fi
+# Merging is the maintainer's call: the ruleset stops a red PR, not a green unreviewed one.
+grep -qE "${sp}gh[[:space:]]+pr[[:space:]]+merge" <<<"$command" && block "gh pr merge"
+grep -qE "${sp}gh[[:space:]]+api" <<<"$command" \
+  && grep -qE "(pulls/[^[:space:]]+/merge|mergePullRequest|enablePullRequestAutoMerge)" <<<"$command" \
+  && block "merge through the API"
 grep -qE "${sp}git[[:space:]]+reset[[:space:]]+(.*[[:space:]])?--hard" <<<"$command" && block "reset --hard"
 grep -qE "${sp}git[[:space:]]+clean[[:space:]]+(.*[[:space:]])?-[a-zA-Z]*f" <<<"$command" && block "clean -f"
 grep -qE "${sp}git[[:space:]]+branch[[:space:]]+(.*[[:space:]])?-D" <<<"$command" && block "branch -D"
