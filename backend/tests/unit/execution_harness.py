@@ -8,7 +8,7 @@ from nexus.adapters.connectors.rss import RssConnector
 from nexus.core.ingestion.entities import Connector, DeactivationReason, Source
 from nexus.core.ingestion.source_config import RssConfig
 from nexus.core.pipeline import ExecutionReport, run_execution
-from nexus.core.shared.ports import FetchError, FetchResponse
+from nexus.core.shared.ports import FetchError, FetchResponse, HttpValidators
 from tests.unit.fakes import (
     FakeClock,
     FakeHttpFetcher,
@@ -58,8 +58,20 @@ def stored_rmc(config: Mapping[str, Any], reason: DeactivationReason | None = No
     )
 
 
-def ok(body: bytes, status: int = 200, url: str = "") -> FetchResponse:
-    return FetchResponse(status=status, body=body, final_url=url)
+def ok(
+    body: bytes,
+    status: int = 200,
+    url: str = "",
+    validators: HttpValidators = HttpValidators(),  # noqa: B008
+    moved_permanently: bool = False,
+) -> FetchResponse:
+    return FetchResponse(
+        status=status,
+        body=body,
+        final_url=url,
+        validators=validators,
+        moved_permanently=moved_permanently,
+    )
 
 
 class Harness:

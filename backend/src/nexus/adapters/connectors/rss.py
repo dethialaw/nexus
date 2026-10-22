@@ -2,13 +2,20 @@
 
 import io
 from calendar import timegm
+from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Any
 
 import feedparser
 
 from nexus.adapters.connectors.xml_guard import check_xml
-from nexus.core.ingestion.entities import RawArticle, RawArticleBatch, Source
+from nexus.core.ingestion.entities import (
+    Anomaly,
+    AnomalyKind,
+    RawArticle,
+    RawArticleBatch,
+    Source,
+)
 from nexus.core.ingestion.errors import CollectionError
 from nexus.core.ingestion.source_config import RssConfig
 from nexus.core.shared.ports import FetchError, FetchUsage, HttpFetcher
@@ -21,12 +28,23 @@ class RssConnector:
     async def read(self, source: Source) -> RawArticleBatch:
         config = RssConfig.model_validate(source.config)
         try:
-            response = await self._fetcher.fetch(config.feed_url, FetchUsage.FEED)
+            response = await self._fetcher.fetch(
+                config.feed_url, FetchUsage.FEED, source.validators
+            )
         except FetchError as error:
             raise CollectionError(str(error)) from error
+        if response.status == 304:
+            return RawArticleBatch(
+                raw_articles=(), unreadable_count=0, validators=source.validators
+            )
         if not 200 <= response.status < 300:
             raise CollectionError(f"HTTP {response.status}")
-        return parse_feed(response.body)
+        batch = parse_feed(response.body)
+        anomalies: tuple[Anomaly, ...] = ()
+        if response.moved_permanently:
+            detail = f"{config.feed_url} moved permanently to {response.final_url}"
+            anomalies = (Anomaly(AnomalyKind.FEED_MOVED, detail),)
+        return replace(batch, validators=response.validators, anomalies=anomalies)
 
 
 def parse_feed(body: bytes) -> RawArticleBatch:

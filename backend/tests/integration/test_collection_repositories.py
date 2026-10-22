@@ -20,6 +20,7 @@ from nexus.core.ingestion.entities import (
     LinkedPageStatus,
     SourceCollection,
 )
+from nexus.core.shared.ports import HttpValidators
 from tests.integration.seed import NOW
 
 
@@ -75,20 +76,30 @@ async def test_list_to_collect_returns_active_subscribed_sources_once(
     assert [s.source_key for s in sources] == ["rss:a.example.com/feed"]
 
 
-async def test_mark_collected_sets_last_collected_at(
+async def test_mark_collected_sets_last_collected_at_and_replaces_the_validators(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     row = source_row("a")
     await add(session_factory, row)
 
     async with SqlUnitOfWork(session_factory) as uow:
-        await uow.sources.mark_collected(row.id, NOW)
+        await uow.sources.mark_collected(row.id, NOW, HttpValidators('"v1"', "Mon, 01 Jan 2026"))
         await uow.commit()
 
     async with SqlUnitOfWork(session_factory) as uow:
         source = await uow.sources.get_by_key(row.source_key)
     assert source is not None
     assert source.last_collected_at == NOW
+    assert source.validators == HttpValidators('"v1"', "Mon, 01 Jan 2026")
+
+    async with SqlUnitOfWork(session_factory) as uow:
+        await uow.sources.mark_collected(row.id, NOW, HttpValidators())
+        await uow.commit()
+
+    async with SqlUnitOfWork(session_factory) as uow:
+        source = await uow.sources.get_by_key(row.source_key)
+    assert source is not None
+    assert source.validators == HttpValidators()
 
 
 async def test_insert_new_skips_known_urls_and_fingerprints_of_the_same_source(

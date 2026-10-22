@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 
 from nexus.core.ingestion.entities import (
+    Anomaly,
     CollectionResult,
     Execution,
     Source,
@@ -21,6 +22,7 @@ class CollectionOutcome:
     collection: SourceCollection
     unreadable_count: int = 0
     excluded_count: int = 0
+    anomalies: tuple[Anomaly, ...] = ()
 
 
 async def list_sources_to_collect(uow: IngestionUnitOfWork) -> tuple[Source, ...]:
@@ -73,6 +75,10 @@ async def collect_source(
             finished_at=finished_at,
         )
         await uow.collections.add(collection)
-        await uow.sources.mark_collected(source.id, finished_at)
+        await uow.sources.mark_collected(source.id, finished_at, batch.validators)
         await uow.commit()
-    return CollectionOutcome(collection=collection, unreadable_count=batch.unreadable_count)
+    return CollectionOutcome(
+        collection=collection,
+        unreadable_count=batch.unreadable_count,
+        anomalies=batch.anomalies,
+    )

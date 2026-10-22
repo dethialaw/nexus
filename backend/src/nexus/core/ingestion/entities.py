@@ -6,6 +6,8 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
+from nexus.core.shared.ports import HttpValidators
+
 
 class Connector(StrEnum):
     RSS = "rss"
@@ -55,6 +57,7 @@ class CollectionResult(StrEnum):
 class AnomalyKind(StrEnum):
     CATALOG_SYNC_BLOCKED = "catalog_sync_blocked"
     NO_SOURCE_TO_COLLECT = "no_source_to_collect"
+    FEED_MOVED = "feed_moved"
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,6 +77,7 @@ class Source:
     owner_user_id: int | None
     deactivation_reason: DeactivationReason | None
     last_collected_at: datetime | None
+    validators: HttpValidators = field(default_factory=HttpValidators)
 
     @property
     def is_active(self) -> bool:
@@ -111,6 +115,8 @@ class RawArticleBatch:
 
     raw_articles: tuple[RawArticle, ...]
     unreadable_count: int
+    validators: HttpValidators = field(default_factory=HttpValidators)
+    anomalies: tuple[Anomaly, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

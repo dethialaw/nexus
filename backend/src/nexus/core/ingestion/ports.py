@@ -13,7 +13,7 @@ from nexus.core.ingestion.entities import (
 )
 from nexus.core.ingestion.source_catalog import CatalogSyncPlan, RawSourceCatalog
 from nexus.core.profile.ports import UserRepository
-from nexus.core.shared.ports import UnitOfWork
+from nexus.core.shared.ports import HttpValidators, UnitOfWork
 
 
 class SourceCatalogReader(Protocol):
@@ -58,7 +58,11 @@ class SourceRepository(Protocol):
         """Active Sources with at least one Subscription."""
         ...
 
-    async def mark_collected(self, source_id: int, collected_at: datetime) -> None: ...
+    async def mark_collected(
+        self, source_id: int, collected_at: datetime, validators: HttpValidators
+    ) -> None:
+        """Record a successful Collection: the HTTP validators replace the stored ones."""
+        ...
 
 
 class ArticleRepository(Protocol):

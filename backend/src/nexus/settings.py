@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     """Direct URL, for Alembic only."""
 
     fetch_timeout_seconds: float = 30.0
-    """Whole-request limit of every fetch from a publisher's site."""
+    """Limit of each request to a publisher's site, redirects included one by one."""
 
     fetch_max_bytes: int = 5_000_000
     """Largest response body read from a publisher's site."""

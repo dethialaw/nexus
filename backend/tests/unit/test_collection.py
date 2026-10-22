@@ -3,6 +3,8 @@
 Every feed here is synthetic, written by hand.
 """
 
+import asyncio
+
 import pytest
 
 from nexus.core.ingestion.entities import (
@@ -12,8 +14,9 @@ from nexus.core.ingestion.entities import (
     ExecutionResult,
     FailureCause,
 )
-from nexus.core.shared.ports import FetchError
+from nexus.core.shared.ports import FetchError, FetchResponse, FetchUsage, HttpValidators
 from tests.unit.execution_harness import Harness, ok, rss_source
+from tests.unit.fakes import FakeHttpFetcher
 
 FEED_A = "https://a.example.com/feed"
 FEED_B = "https://b.example.com/feed"
@@ -97,7 +100,10 @@ async def test_one_failed_collection_makes_the_execution_partial() -> None:
     ("response", "cause"),
     [
         (ok(b"", status=301), "301"),
+        (ok(b"", status=429), "HTTP 429"),
+        (ok(b"", status=503), "HTTP 503"),
         (FetchError("timeout after 30s"), "timeout"),
+        (FetchError("only https URLs are fetched: http://a.example.com/feed"), "only https"),
         (ok(b'<?xml version="1.0"?><!DOCTYPE rss><rss/>'), "DOCTYPE"),
         (ok(b"<html><body>Not a feed</body></html>"), "not a feed"),
     ],
@@ -160,3 +166,99 @@ async def test_the_report_counts_unreadable_items_of_each_collection() -> None:
     [outcome] = report.collections
     assert (outcome.collection.article_count, outcome.unreadable_count) == (1, 1)
     assert outcome.excluded_count == 0
+
+
+async def test_a_304_is_a_successful_collection_without_article_that_keeps_the_validators() -> None:
+    validators = HttpValidators(etag='"v1"', last_modified="Mon, 01 Jan 2026")
+    harness = Harness(rss_source(1, FEED_A), subscribed=[1])
+    harness.serve(FEED_A, ok(feed("One"), validators=validators))
+    await harness.run()
+    harness.serve(FEED_A, ok(b"", status=304))
+
+    report = await harness.run()
+
+    assert harness.fetcher.sent_validators[-1] == validators
+    assert [(c.result, c.article_count) for c in harness.collections.rows] == [
+        (CollectionResult.SUCCESS, 1),
+        (CollectionResult.SUCCESS, 0),
+    ]
+    assert report.execution.result is ExecutionResult.SUCCESS
+    assert harness.sources.rows["rss:a.example.com/feed"].validators == validators
+
+
+async def test_validators_follow_each_200_and_are_cleared_when_the_server_stops_sending() -> None:
+    harness = Harness(rss_source(1, FEED_A), subscribed=[1])
+    key = "rss:a.example.com/feed"
+
+    harness.serve(FEED_A, ok(feed("One"), validators=HttpValidators(etag='"v1"')))
+    await harness.run()
+    assert harness.sources.rows[key].validators == HttpValidators(etag='"v1"')
+
+    harness.serve(FEED_A, ok(feed("One"), validators=HttpValidators(etag='"v2"')))
+    await harness.run()
+    assert harness.sources.rows[key].validators == HttpValidators(etag='"v2"')
+
+    harness.serve(FEED_A, ok(feed("One")))
+    await harness.run()
+    assert harness.sources.rows[key].validators == HttpValidators()
+
+
+async def test_a_failed_collection_leaves_the_validators_untouched() -> None:
+    validators = HttpValidators(etag='"v1"')
+    harness = Harness(rss_source(1, FEED_A), subscribed=[1])
+    harness.serve(FEED_A, ok(feed("One"), validators=validators))
+    await harness.run()
+    harness.serve(FEED_A, ok(b"", status=503))
+
+    await harness.run()
+
+    assert harness.sources.rows["rss:a.example.com/feed"].validators == validators
+
+
+async def test_a_permanent_redirect_is_an_anomaly_with_the_old_and_the_new_url() -> None:
+    harness = Harness(rss_source(1, FEED_A), subscribed=[1])
+    new_url = "https://a.example.com/new-feed"
+    harness.serve(FEED_A, ok(feed("One"), url=new_url, moved_permanently=True))
+
+    report = await harness.run()
+
+    [anomaly] = report.execution.anomalies
+    assert anomaly.kind is AnomalyKind.FEED_MOVED
+    assert FEED_A in anomaly.detail
+    assert new_url in anomaly.detail
+    assert report.execution.result is ExecutionResult.SUCCESS
+
+
+async def test_a_temporary_redirect_is_not_an_anomaly() -> None:
+    harness = Harness(rss_source(1, FEED_A), subscribed=[1])
+    harness.serve(FEED_A, ok(feed("One"), url="https://a.example.com/tmp"))
+
+    report = await harness.run()
+
+    assert report.execution.anomalies == ()
+
+
+async def test_at_most_eight_collections_run_at_the_same_time() -> None:
+    class SlowFetcher(FakeHttpFetcher):
+        running = 0
+        peak = 0
+
+        async def fetch(
+            self, url: str, usage: FetchUsage, validators: HttpValidators | None = None
+        ) -> FetchResponse:
+            self.running += 1
+            self.peak = max(self.peak, self.running)
+            await asyncio.sleep(0.01)
+            self.running -= 1
+            return ok(feed())
+
+    sources = [rss_source(i, f"https://s{i}.example.com/feed") for i in range(1, 21)]
+    harness = Harness(*sources, subscribed=range(1, 21))
+    slow = SlowFetcher()
+    harness.fetcher = slow
+
+    report = await harness.run()
+
+    assert len(harness.collections.rows) == 20
+    assert report.execution.result is ExecutionResult.SUCCESS
+    assert slow.peak == 8

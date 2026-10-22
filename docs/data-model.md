@@ -115,7 +115,7 @@ PK (`user_id`, `article_id`, `interest_version_id`). La Pertinence globale (le m
 
 ### Exécution et livraison
 
-**`execution`** : `id`, `started_at`, `finished_at`, `result` CHECK (`success`, `partial`, `failed`), `failure_cause` CHECK (`technical`, `collection`) NULL, `error_detail` NULL, `anomalies` jsonb (défaut `[]`) : avertissements qui ne font pas échouer l'Exécution, par exemple `[{"kind": "catalog_sync_blocked", "detail": …}]`.
+**`execution`** : `id`, `started_at`, `finished_at`, `result` CHECK (`success`, `partial`, `failed`), `failure_cause` CHECK (`technical`, `collection`) NULL, `error_detail` NULL, `anomalies` jsonb (défaut `[]`) : avertissements qui ne font pas échouer l'Exécution, par exemple `[{"kind": "catalog_sync_blocked", "detail": …}]` ou `feed_moved` (flux déplacé par une redirection permanente, avec l'ancienne et la nouvelle URL).
 
 **`source_collection`** : `id`, `execution_id` (FK, CASCADE), `source_id` (FK), `result` CHECK (`success`, `failed`), `article_count`, `error_detail`, `started_at`, `finished_at`.
 
