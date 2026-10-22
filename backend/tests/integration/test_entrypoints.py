@@ -46,7 +46,8 @@ async def test_batch_records_one_finished_execution_and_syncs_the_catalog(
         sources = (await session.execute(select(SourceRow))).scalars().all()
     assert row.result == "success"
     assert row.finished_at is not None
-    assert row.anomalies == []
+    # No Subscription yet: nothing is fetched, and the Execution says so.
+    assert [anomaly["kind"] for anomaly in row.anomalies] == ["no_source_to_collect"]
     assert len(sources) == 10
     assert all(source.is_active and source.connector == "rss" for source in sources)
 

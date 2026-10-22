@@ -1,13 +1,21 @@
 """In-memory adapters for core tests."""
 
+import copy
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from types import TracebackType
 from typing import Any, Self
 
-from nexus.core.ingestion.entities import DeactivationReason, Execution, Source
+from nexus.core.ingestion.entities import (
+    Article,
+    DeactivationReason,
+    Execution,
+    Source,
+    SourceCollection,
+)
 from nexus.core.ingestion.source_catalog import CatalogSyncPlan, RawSourceCatalog
+from nexus.core.shared.ports import FetchError, FetchResponse, FetchUsage
 
 
 class FakeClock:
@@ -37,6 +45,21 @@ class FakeSourceCatalog:
         return self._catalog
 
 
+class FakeHttpFetcher:
+    """Serves the response, or raises the error, registered for each URL."""
+
+    def __init__(self, responses: Mapping[str, FetchResponse | FetchError] | None = None) -> None:
+        self.responses = dict(responses or {})
+        self.requested: list[str] = []
+
+    async def fetch(self, url: str, usage: FetchUsage) -> FetchResponse:
+        self.requested.append(url)
+        response = self.responses[url]
+        if isinstance(response, FetchError):
+            raise response
+        return response
+
+
 class InMemoryExecutionRepository:
     def __init__(self) -> None:
         self.rows: dict[int, Execution] = {}
@@ -51,15 +74,28 @@ class InMemoryExecutionRepository:
 
 
 class InMemorySourceRepository:
-    def __init__(self, *sources: Source) -> None:
+    def __init__(self, *sources: Source, subscribed: Sequence[int] = ()) -> None:
         self.rows: dict[str, Source] = {source.source_key: source for source in sources}
+        self.subscribed = set(subscribed)
         self.config_writes = 0
 
     async def list_common(self) -> tuple[Source, ...]:
         return tuple(source for source in self.rows.values() if source.is_common)
 
+    async def list_to_collect(self) -> tuple[Source, ...]:
+        return tuple(
+            source
+            for source in self.rows.values()
+            if source.is_active and source.id in self.subscribed
+        )
+
     async def get_by_key(self, source_key: str) -> Source | None:
         return self.rows.get(source_key)
+
+    async def mark_collected(self, source_id: int, collected_at: datetime) -> None:
+        for key, source in self.rows.items():
+            if source.id == source_id:
+                self.rows[key] = replace(source, last_collected_at=collected_at)
 
     async def apply_catalog_sync(self, plan: CatalogSyncPlan) -> None:
         for entry in plan.to_insert:
@@ -90,6 +126,34 @@ class InMemorySourceRepository:
             )
 
 
+class InMemoryArticleRepository:
+    def __init__(self) -> None:
+        self.rows: list[Article] = []
+
+    async def insert_new(self, articles: Sequence[Article]) -> int:
+        inserted = 0
+        for article in articles:
+            if not any(
+                row.source_id == article.source_id
+                and (
+                    row.canonical_url == article.canonical_url
+                    or row.fingerprint == article.fingerprint
+                )
+                for row in self.rows
+            ):
+                self.rows.append(article)
+                inserted += 1
+        return inserted
+
+
+class InMemoryCollectionRepository:
+    def __init__(self) -> None:
+        self.rows: list[SourceCollection] = []
+
+    async def add(self, collection: SourceCollection) -> None:
+        self.rows.append(collection)
+
+
 class InMemoryUnitOfWork:
     """Shares its repositories across instances; writes are kept only on commit."""
 
@@ -97,14 +161,21 @@ class InMemoryUnitOfWork:
         self,
         executions: InMemoryExecutionRepository,
         sources: InMemorySourceRepository | None = None,
+        articles: InMemoryArticleRepository | None = None,
+        collections: InMemoryCollectionRepository | None = None,
     ) -> None:
         self.executions = executions
         self.sources = sources or InMemorySourceRepository()
+        self.articles = articles or InMemoryArticleRepository()
+        self.collections = collections or InMemoryCollectionRepository()
         self.committed = False
-        self._snapshot: tuple[dict[int, Execution], dict[str, Source]] = ({}, {})
+        self._snapshot: list[Any] = []
+
+    def _repositories(self) -> list[Any]:
+        return [self.executions, self.sources, self.articles, self.collections]
 
     async def __aenter__(self) -> Self:
-        self._snapshot = (dict(self.executions.rows), dict(self.sources.rows))
+        self._snapshot = [copy.copy(repository.rows) for repository in self._repositories()]
         return self
 
     async def __aexit__(
@@ -114,7 +185,8 @@ class InMemoryUnitOfWork:
         tb: TracebackType | None,
     ) -> None:
         if not self.committed:
-            self.executions.rows, self.sources.rows = self._snapshot
+            for repository, rows in zip(self._repositories(), self._snapshot, strict=True):
+                repository.rows = rows
 
     async def commit(self) -> None:
         self.committed = True

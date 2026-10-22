@@ -8,6 +8,8 @@ dependencies = [
     "alembic>=1.16",
     "asyncpg>=0.30",
     "fastapi>=0.118",
+    "feedparser>=6.0.14",
+    "httpx2>=2.13.1",
     "numpy>=2.2",
     "pgvector>=0.4",
     "pydantic>=2.11",
@@ -24,7 +26,6 @@ nexus-admin = "nexus.entrypoints.admin.__main__:main"
 
 [dependency-groups]
 dev = [
-    "httpx2>=2.13.1",
     "import-linter>=2.3",
     "mypy>=1.18",
     "pytest>=8.4",
@@ -59,7 +60,7 @@ mypy_path = "src"
 explicit_package_bases = true
 
 [[tool.mypy.overrides]]
-module = ["pgvector.*"]
+module = ["pgvector.*", "feedparser"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
