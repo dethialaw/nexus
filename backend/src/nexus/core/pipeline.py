@@ -6,6 +6,12 @@ Compositions come next.
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 
+from nexus.core.ingestion.catalog_sync import synchronize_source_catalog
+from nexus.core.ingestion.collection import (
+    CollectionOutcome,
+    collect_source,
+    list_sources_to_collect,
+)
 from nexus.core.ingestion.entities import (
     Anomaly,
     AnomalyKind,
@@ -17,13 +23,7 @@ from nexus.core.ingestion.entities import (
     SourceCollection,
 )
 from nexus.core.ingestion.ports import IngestionUnitOfWork, RawArticleReader, SourceCatalogReader
-from nexus.core.ingestion.services import (
-    close_execution,
-    collect_source,
-    list_sources_to_collect,
-    open_execution,
-    synchronize_source_catalog,
-)
+from nexus.core.ingestion.services import close_execution, open_execution
 from nexus.core.shared.ports import Clock
 
 
@@ -33,7 +33,7 @@ class ExecutionReport:
 
     execution: Execution
     updated_source_keys: tuple[str, ...] = ()
-    collections: tuple[SourceCollection, ...] = ()
+    collections: tuple[CollectionOutcome, ...] = ()
 
 
 async def run_execution(
@@ -51,7 +51,7 @@ async def run_execution(
             anomalies.append(
                 Anomaly(AnomalyKind.NO_SOURCE_TO_COLLECT, "no active Source has a Subscription")
             )
-        collections = [
+        outcomes = [
             await collect_source(
                 uow_factory(), connectors.get(source.connector), clock, execution, source
             )
@@ -67,7 +67,7 @@ async def run_execution(
             error_detail=f"{type(error).__name__}: {error}",
         )
         raise
-    result = _result(collections)
+    result = _result([outcome.collection for outcome in outcomes])
     closed = await close_execution(
         uow_factory(),
         clock,
@@ -79,7 +79,7 @@ async def run_execution(
     return ExecutionReport(
         execution=closed,
         updated_source_keys=tuple(entry.source_key for entry in plan.to_update),
-        collections=tuple(collections),
+        collections=tuple(outcomes),
     )
 
 
