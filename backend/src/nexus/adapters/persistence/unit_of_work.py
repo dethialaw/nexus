@@ -5,12 +5,10 @@ from typing import Self
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from nexus.adapters.persistence.repositories import (
-    SqlExecutionRepository,
-    SqlSourceRepository,
-    SqlSubscriptionRepository,
-    SqlUserRepository,
-)
+from nexus.adapters.persistence.repositories.execution import SqlExecutionRepository
+from nexus.adapters.persistence.repositories.source import SqlSourceRepository
+from nexus.adapters.persistence.repositories.subscription import SqlSubscriptionRepository
+from nexus.adapters.persistence.repositories.user import SqlUserRepository
 
 
 class SqlUnitOfWork:
