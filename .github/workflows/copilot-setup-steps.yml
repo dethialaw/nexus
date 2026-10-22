@@ -1,0 +1,55 @@
+name: Copilot setup steps
+
+# Prepares the Copilot coding agent's environment so it can run the backend checks of
+# backend/AGENTS.md, integration tests included. Only the copilot-setup-steps job is read,
+# and only from the default branch.
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/copilot-setup-steps.yml
+
+permissions:
+  contents: read
+
+jobs:
+  copilot-setup-steps:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: nexus
+          POSTGRES_PASSWORD: nexus
+          POSTGRES_DB: nexus_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U nexus -d nexus_test"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          enable-cache: true
+      # Only the keys listed by GitHub are read (`defaults` is not): each step sets its directory.
+      - run: uv sync --locked
+        working-directory: backend
+      # The job takes no `env`: the settings and the test fixtures read backend/.env,
+      # ignored by git. Same disposable database as CI, no secret.
+      - name: Point the backend at the service database
+        working-directory: backend
+        run: |
+          url=postgresql+asyncpg://nexus:nexus@127.0.0.1:5432/nexus_test
+          printf 'DATABASE_URL=%s\nDATABASE_URL_DIRECT=%s\nTEST_DATABASE_URL=%s\n' \
+            "$url" "$url" "$url" > .env
+      - name: The checks of backend/AGENTS.md run
+        working-directory: backend
+        run: |
+          uv run ruff check && uv run ruff format --check && uv run mypy \
+            && uv run lint-imports && uv run pytest
