@@ -9,7 +9,7 @@ from nexus.core.ingestion.entities import (
     SourceCollection,
 )
 from nexus.core.ingestion.errors import CollectionError
-from nexus.core.ingestion.normalization import to_article
+from nexus.core.ingestion.normalization import normalize_batch
 from nexus.core.ingestion.ports import IngestionUnitOfWork, RawArticleReader
 from nexus.core.shared.ports import Clock
 
@@ -59,7 +59,7 @@ async def collect_source(
             await uow.commit()
         return CollectionOutcome(collection=failed)
 
-    articles = [to_article(raw, source.id, started_at) for raw in batch.raw_articles]
+    articles, excluded_count = normalize_batch(batch, source, started_at)
     async with uow:
         inserted = await uow.articles.insert_new(articles)
         finished_at = clock.now()
@@ -75,4 +75,8 @@ async def collect_source(
         await uow.collections.add(collection)
         await uow.sources.mark_collected(source.id, finished_at)
         await uow.commit()
-    return CollectionOutcome(collection=collection, unreadable_count=batch.unreadable_count)
+    return CollectionOutcome(
+        collection=collection,
+        unreadable_count=batch.unreadable_count,
+        excluded_count=excluded_count,
+    )
