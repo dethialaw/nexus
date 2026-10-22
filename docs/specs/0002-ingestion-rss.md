@@ -210,7 +210,7 @@ Nouveau point d'entrée en ligne de commande, déclaré comme script du paquet. 
 
 - **`user upsert --handle … --timezone … --briefing-hour …`** : fuseau validé comme nom IANA, heure entre 0 et 23 ;
 - **`subscribe <handle> <source_key>`** : refuse un `source_key` inconnu ; accepte une Source inactive avec un avertissement ;
-- **`unsubscribe <handle> <source_key>`** : ne fait rien si l'Abonnement n'existe pas ;
+- **`unsubscribe <handle> <source_key>`** : ne fait rien si l'Abonnement n'existe pas ; refuse, comme `subscribe`, un handle ou un `source_key` inconnu, pour qu'une faute de frappe donne une erreur explicite plutôt qu'un succès silencieux ;
 - **`source reactivate <source_key>`** ;
 - **`source check <url>`** : télécharge le flux par `HttpFetcher` (usage « flux », mêmes protections) et l'analyse comme une Collecte. Il affiche les éléments lisibles, illisibles et exclus, les dates, les validateurs HTTP, les anomalies (`feed_moved`…) et la cause d'un refus. Il **n'ouvre aucune connexion à la base** : il est en lecture seule par construction.
 
@@ -317,7 +317,7 @@ Comme les tests de points d'entrée existants :
   - contenu du résumé, version d'expat comprise.
 - **`nexus-admin`** :
   - idempotence de `user upsert`, `subscribe` et `unsubscribe` ;
-  - refus d'un `source_key` inconnu ;
+  - refus d'un `source_key` inconnu, par `subscribe` comme par `unsubscribe` ;
   - avertissement pour une Source inactive ;
   - `source reactivate` ;
   - `source check`, qui fonctionne sans aucune configuration de base de données.
