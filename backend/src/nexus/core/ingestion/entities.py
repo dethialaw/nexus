@@ -138,3 +138,4 @@ class SourceCollection:
     error_detail: str | None
     started_at: datetime
     finished_at: datetime
+    unreadable_count: int = 0

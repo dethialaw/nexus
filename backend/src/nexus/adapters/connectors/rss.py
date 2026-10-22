@@ -4,6 +4,7 @@ import io
 from calendar import timegm
 from datetime import UTC, datetime
 from typing import Any
+from urllib.parse import urlparse
 
 import feedparser
 
@@ -36,6 +37,8 @@ def parse_feed(body: bytes) -> RawArticleBatch:
     if not parsed.get("version"):
         raise CollectionError("not a feed: no RSS or Atom document found")
     readable = [raw for entry in parsed.entries if (raw := _raw_article(entry)) is not None]
+    if parsed.entries and not readable:
+        raise CollectionError(f"all {len(parsed.entries)} feed items are unreadable")
     return RawArticleBatch(
         raw_articles=tuple(readable), unreadable_count=len(parsed.entries) - len(readable)
     )
@@ -44,11 +47,19 @@ def parse_feed(body: bytes) -> RawArticleBatch:
 def _raw_article(entry: Any) -> RawArticle | None:
     title = (entry.get("title") or "").strip()
     link = (entry.get("link") or "").strip()
+    guid = (entry.get("id") or "").strip()
+    if not link or (link == guid and not _is_url(guid)):
+        # feedparser copies a guid into `link` itself, whether or not it is a URL.
+        link = guid if _is_url(guid) else ""
     if not title or not link:
         return None
     content = entry.get("content") or []
     text = content[0].get("value", "") if content else entry.get("summary", "")
     return RawArticle(title=title, link=link, text=text, published_at=_date(entry))
+
+
+def _is_url(value: str) -> bool:
+    return urlparse(value).scheme in ("http", "https")
 
 
 def _date(entry: Any) -> datetime | None:

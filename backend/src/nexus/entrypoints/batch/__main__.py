@@ -22,10 +22,11 @@ async def run(container: Container | None = None) -> None:
         for outcome in report.collections:
             collection = outcome.collection
             logger.info(
-                "collection of source %s: %s, %s new Articles%s",
+                "collection of source %s: %s, %s new Articles, %s unreadable items%s",
                 collection.source_id,
                 collection.result,
                 collection.article_count,
+                collection.unreadable_count,
                 f" ({collection.error_detail})" if collection.error_detail else "",
             )
         for source_key in report.updated_source_keys:

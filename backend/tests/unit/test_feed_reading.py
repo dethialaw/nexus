@@ -118,3 +118,51 @@ def test_prefilter_refuses_before_parsing(body: bytes, cause: str) -> None:
 def test_unparseable_bytes_are_refused() -> None:
     with pytest.raises(CollectionError, match="not a feed"):
         parse_feed(b"<html><body>Not a feed</body></html>")
+
+
+XXE = b'<!DOCTYPE rss [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>'
+LAUGHS = b'<!DOCTYPE rss [<!ENTITY a "aaaaaaaaaa"><!ENTITY b "&a;&a;&a;&a;&a;&a;&a;&a;&a;&a;">]>'
+ITEM = b"<item><title>T</title><link>https://example.com/t</link></item>"
+
+
+@pytest.mark.parametrize("attack", [XXE, LAUGHS, b"<!-- x --><!doctype rss>"])
+@pytest.mark.parametrize("malformed", [False, True])
+def test_attacks_are_refused_before_parsing_on_well_formed_and_malformed_feeds(
+    attack: bytes, malformed: bool
+) -> None:
+    unclosed = b"<unclosed><&" if malformed else b""
+    body = (
+        b'<?xml version="1.0"?>'
+        + attack
+        + b'<rss version="2.0"><channel>'
+        + unclosed
+        + ITEM
+        + b"</channel></rss>"
+    )
+
+    with pytest.raises(CollectionError, match="refused before parsing"):
+        parse_feed(body)
+
+
+def test_an_item_without_link_falls_back_on_a_guid_that_is_a_url() -> None:
+    body = (
+        b'<rss version="2.0"><channel><title>E</title>'
+        b"<item><title>A</title><guid>https://example.com/a</guid></item>"
+        b"<item><title>B</title><guid>not-a-url</guid></item>"
+        b"<item><link>https://example.com/c</link></item>"
+        b"</channel></rss>"
+    )
+
+    batch = parse_feed(body)
+
+    assert [raw.link for raw in batch.raw_articles] == ["https://example.com/a"]
+    assert batch.unreadable_count == 2
+
+
+def test_a_feed_whose_items_are_all_unreadable_is_refused() -> None:
+    body = (
+        b'<rss version="2.0"><channel><title>E</title><item><title>A</title></item></channel></rss>'
+    )
+
+    with pytest.raises(CollectionError, match="unreadable"):
+        parse_feed(body)

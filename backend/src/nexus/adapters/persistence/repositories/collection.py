@@ -17,6 +17,7 @@ class SqlCollectionRepository:
                 source_id=collection.source_id,
                 result=str(collection.result),
                 article_count=collection.article_count,
+                unreadable_count=collection.unreadable_count,
                 error_detail=collection.error_detail,
                 started_at=collection.started_at,
                 finished_at=collection.finished_at,

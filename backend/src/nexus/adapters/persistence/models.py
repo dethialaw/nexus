@@ -237,6 +237,7 @@ class SourceCollectionRow(Base):
     source_id: Mapped[int] = _fk("source.id", ondelete="RESTRICT")
     result: Mapped[str | None] = mapped_column(Text)
     article_count: Mapped[int | None] = mapped_column(Integer)
+    unreadable_count: Mapped[int] = mapped_column(Integer, server_default="0")
     error_detail: Mapped[str | None] = mapped_column(Text)
     started_at: Mapped[datetime] = mapped_column(Timestamp)
     finished_at: Mapped[datetime | None] = mapped_column(Timestamp)
