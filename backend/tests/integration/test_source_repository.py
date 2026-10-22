@@ -149,3 +149,50 @@ async def test_apply_updates_the_config_and_keeps_the_activity(
     row = (await rows_by_key(session_factory))["rss:rmcsport.bfmtv.com/rss/football"]
     assert row.config["exclude_url_patterns"] == ["_DN-"]
     assert row.deactivation_reason == "repeated_failures"
+
+
+async def test_deactivate_for_repeated_failures_only_touches_active_sources(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    await add(
+        session_factory,
+        reddit_row("python"),
+        reddit_row("rust", DeactivationReason.MAINTAINER),
+    )
+    rows = await rows_by_key(session_factory)
+
+    async with SqlUnitOfWork(session_factory) as uow:
+        changed = [
+            await uow.sources.deactivate_for_repeated_failures(rows["reddit:python"].id),
+            await uow.sources.deactivate_for_repeated_failures(rows["reddit:rust"].id),
+        ]
+        await uow.commit()
+
+    rows = await rows_by_key(session_factory)
+    assert changed == [True, False]
+    assert rows["reddit:python"].deactivation_reason == "repeated_failures"
+    assert not rows["reddit:python"].is_active
+    assert rows["reddit:rust"].deactivation_reason == "maintainer"
+
+
+async def test_reactivate_only_touches_inactive_sources(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    await add(
+        session_factory,
+        reddit_row("python"),
+        reddit_row("rust", DeactivationReason.REPEATED_FAILURES),
+    )
+    rows = await rows_by_key(session_factory)
+
+    async with SqlUnitOfWork(session_factory) as uow:
+        changed = [
+            await uow.sources.reactivate(rows["reddit:python"].id),
+            await uow.sources.reactivate(rows["reddit:rust"].id),
+            await uow.sources.reactivate(rows["reddit:rust"].id),
+        ]
+        await uow.commit()
+
+    rows = await rows_by_key(session_factory)
+    assert changed == [False, True, False]
+    assert (rows["reddit:rust"].is_active, rows["reddit:rust"].deactivation_reason) == (True, None)

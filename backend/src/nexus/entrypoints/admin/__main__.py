@@ -6,6 +6,7 @@ import sys
 from collections.abc import Sequence
 
 from nexus.bootstrap import Container, build_container
+from nexus.core.ingestion.sources import reactivate_source
 from nexus.core.ingestion.subscriptions import subscribe, unsubscribe
 from nexus.core.profile.services import upsert_user
 from nexus.core.shared.errors import NexusError
@@ -22,6 +23,12 @@ def _parser() -> argparse.ArgumentParser:
     upsert.add_argument("--handle", required=True, help="non-personal identifier")
     upsert.add_argument("--timezone", required=True, help="IANA name, e.g. Africa/Dakar")
     upsert.add_argument("--briefing-hour", required=True, type=int, help="local hour, 0-23")
+
+    source = commands.add_parser("source", help="manage Sources").add_subparsers(
+        dest="source_command", required=True
+    )
+    reactivate = source.add_parser("reactivate", help="put a deactivated Source back in collection")
+    reactivate.add_argument("source_key")
 
     for name in ("subscribe", "unsubscribe"):
         command = commands.add_parser(name, help=f"{name} a User to a Source")
@@ -56,6 +63,9 @@ async def _dispatch(args: argparse.Namespace, container: Container) -> None:
             args.briefing_hour,
         )
         print(f"user {user.handle}: timezone {user.timezone}, briefing at {user.briefing_hour}h")
+    elif args.command == "source":
+        changed = await reactivate_source(container.uow_factory(), args.source_key)
+        print(f"{'reactivated' if changed else 'already active'}: {args.source_key}")
     elif args.command == "subscribe":
         change = await subscribe(
             container.uow_factory(), container.clock, args.handle, args.source_key

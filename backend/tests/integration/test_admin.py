@@ -166,3 +166,28 @@ async def test_subscribe_to_an_inactive_source_warns_and_subscribes(
     assert code == 0
     assert "inactive" in capsys.readouterr().err
     assert await subscriptions(session_factory) == ["reddit:python"]
+
+
+async def test_source_reactivate_is_idempotent(
+    admin: "Admin", session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    await add_source(session_factory, "python", active=False)
+
+    codes = [
+        await admin("source", "reactivate", "reddit:python"),
+        await admin("source", "reactivate", "reddit:python"),
+    ]
+
+    assert codes == [0, 0]
+    async with session_factory() as session:
+        row = (await session.execute(select(SourceRow))).scalar_one()
+    assert (row.is_active, row.deactivation_reason) == (True, None)
+
+
+async def test_source_reactivate_refuses_an_unknown_source_key(
+    admin: "Admin", capsys: pytest.CaptureFixture[str]
+) -> None:
+    code = await admin("source", "reactivate", "reddit:nope")
+
+    assert code != 0
+    assert "reddit:nope" in capsys.readouterr().err
