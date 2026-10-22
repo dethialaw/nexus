@@ -5,11 +5,12 @@ from typing import Self
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from nexus.adapters.persistence.repositories import SqlExecutionRepository
+from nexus.adapters.persistence.repositories import SqlExecutionRepository, SqlSourceRepository
 
 
 class SqlUnitOfWork:
     executions: SqlExecutionRepository
+    sources: SqlSourceRepository
 
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory
@@ -19,6 +20,7 @@ class SqlUnitOfWork:
         self._session = self._session_factory()
         await self._session.begin()
         self.executions = SqlExecutionRepository(self._session)
+        self.sources = SqlSourceRepository(self._session)
         return self
 
     async def __aexit__(

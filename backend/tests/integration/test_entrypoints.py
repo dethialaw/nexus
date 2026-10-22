@@ -3,7 +3,7 @@ from pydantic import SecretStr
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from nexus.adapters.persistence.models import ExecutionRow
+from nexus.adapters.persistence.models import ExecutionRow, SourceRow
 from nexus.bootstrap import build_container
 from nexus.entrypoints.api.app import create_app
 from nexus.entrypoints.batch.__main__ import run
@@ -36,15 +36,19 @@ def test_health_reports_an_unreachable_database() -> None:
     assert response.json() == {"status": "unavailable", "database": "unavailable"}
 
 
-async def test_batch_records_one_finished_execution(
+async def test_batch_records_one_finished_execution_and_syncs_the_catalog(
     session_factory: async_sessionmaker[AsyncSession], database_url: str
 ) -> None:
     await run(build_container(settings_for(database_url)))
 
     async with session_factory() as session:
         row = (await session.execute(select(ExecutionRow))).scalar_one()
+        sources = (await session.execute(select(SourceRow))).scalars().all()
     assert row.result == "success"
     assert row.finished_at is not None
+    assert row.anomalies == []
+    assert len(sources) == 10
+    assert all(source.is_active and source.connector == "rss" for source in sources)
 
 
 def test_cors_allows_the_front_end_origin() -> None:

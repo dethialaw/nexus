@@ -29,12 +29,16 @@ class _SourceConfig(BaseModel):
 class RssConfig(_SourceConfig):
     connector: Literal[Connector.RSS] = Connector.RSS
     feed_url: str
+    # Case-sensitive substrings of an item's canonical URL; not part of the `source_key`.
+    # An empty pattern would match every URL.
+    exclude_url_patterns: tuple[Annotated[str, Field(min_length=1)], ...] = ()
 
     @field_validator("feed_url")
     @classmethod
-    def _absolute_http_url(cls, value: str) -> str:
-        if urlsplit(value).scheme not in {"http", "https"}:
-            raise ValueError("feed_url must be an http(s) URL")
+    def _absolute_https_url(cls, value: str) -> str:
+        # Content that can be altered in transit never enters Nexus.
+        if urlsplit(value).scheme != "https":
+            raise ValueError("feed_url must be an https URL")
         normalize_url(value)
         return value
 

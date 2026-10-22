@@ -8,7 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from nexus.adapters.persistence.database import create_engine, create_session_factory, ping
 from nexus.adapters.persistence.unit_of_work import SqlUnitOfWork
-from nexus.core.ingestion.ports import IngestionUnitOfWork
+from nexus.adapters.source_catalog.reader import TomlSourceCatalog
+from nexus.core.ingestion.ports import IngestionUnitOfWork, SourceCatalogReader
 from nexus.core.shared.ports import Clock
 from nexus.settings import Settings
 
@@ -23,6 +24,7 @@ class Container:
     engine: AsyncEngine
     clock: Clock
     uow_factory: Callable[[], IngestionUnitOfWork]
+    source_catalog: SourceCatalogReader
 
     def check_database(self) -> Awaitable[None]:
         return ping(self.engine)
@@ -39,4 +41,5 @@ def build_container(settings: Settings | None = None) -> Container:
         engine=engine,
         clock=SystemClock(),
         uow_factory=lambda: SqlUnitOfWork(session_factory),
+        source_catalog=TomlSourceCatalog(),
     )

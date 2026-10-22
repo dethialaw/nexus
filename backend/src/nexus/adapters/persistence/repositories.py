@@ -3,17 +3,22 @@
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import update
+from sqlalchemy import select, update
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from nexus.adapters.persistence.models import ExecutionRow
+from nexus.adapters.persistence.models import ExecutionRow, SourceRow
 from nexus.core.ingestion.entities import (
     Anomaly,
     AnomalyKind,
+    Connector,
+    DeactivationReason,
     Execution,
     ExecutionResult,
     FailureCause,
+    Source,
 )
+from nexus.core.ingestion.source_catalog import CatalogSyncPlan
 
 
 def execution_to_domain(row: ExecutionRow) -> Execution:
@@ -58,3 +63,72 @@ class SqlExecutionRepository:
                 anomalies=_anomalies_to_row(execution.anomalies),
             )
         )
+
+
+def source_to_domain(row: SourceRow) -> Source:
+    return Source(
+        id=row.id,
+        source_key=row.source_key,
+        connector=Connector(row.connector),
+        config=row.config,
+        owner_user_id=row.owner_user_id,
+        deactivation_reason=(
+            None if row.deactivation_reason is None else DeactivationReason(row.deactivation_reason)
+        ),
+        last_collected_at=row.last_collected_at,
+    )
+
+
+class SqlSourceRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def list_common(self) -> tuple[Source, ...]:
+        rows = await self._session.execute(
+            select(SourceRow).where(SourceRow.owner_user_id.is_(None)).order_by(SourceRow.id)
+        )
+        return tuple(source_to_domain(row) for row in rows.scalars())
+
+    async def apply_catalog_sync(self, plan: CatalogSyncPlan) -> None:
+        common = SourceRow.owner_user_id.is_(None)
+        if plan.to_insert:
+            await self._session.execute(
+                insert(SourceRow)
+                .values(
+                    [
+                        {
+                            "source_key": entry.source_key,
+                            "connector": str(entry.config.connector),
+                            "config": entry.config.model_dump(mode="json"),
+                            "is_active": True,
+                        }
+                        for entry in plan.to_insert
+                    ]
+                )
+                .on_conflict_do_nothing(index_elements=[SourceRow.source_key])
+            )
+        if plan.to_deactivate:
+            await self._session.execute(
+                update(SourceRow)
+                .where(common, SourceRow.is_active, SourceRow.source_key.in_(plan.to_deactivate))
+                .values(
+                    is_active=False,
+                    deactivation_reason=str(DeactivationReason.REMOVED_FROM_CATALOG),
+                )
+            )
+        if plan.to_reactivate:
+            await self._session.execute(
+                update(SourceRow)
+                .where(
+                    common,
+                    SourceRow.deactivation_reason == str(DeactivationReason.REMOVED_FROM_CATALOG),
+                    SourceRow.source_key.in_(plan.to_reactivate),
+                )
+                .values(is_active=True, deactivation_reason=None)
+            )
+        for entry in plan.to_update:
+            await self._session.execute(
+                update(SourceRow)
+                .where(common, SourceRow.source_key == entry.source_key)
+                .values(config=entry.config.model_dump(mode="json"))
+            )
