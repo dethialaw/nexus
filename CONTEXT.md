@@ -112,7 +112,7 @@ _Avoid_: doublon, similarité
 
 **Utilisateur**:
 La personne pour qui Nexus fait la veille, rattachée à un fuseau horaire ; tout ce qui révèle ses centres d'intérêt (Profil, Scores de pertinence, Briefings, Signaux, Conversations) lui est propre et n'est jamais mutualisé.
-_Code_: `app_user`
+_Code_: `user`
 _Avoid_: compte, client
 
 **Profil d'intérêts**:
