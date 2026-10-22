@@ -148,3 +148,15 @@ async def test_an_error_outside_collections_closes_the_execution_as_technical_fa
     assert "database gone" in (execution.error_detail or "")
     assert harness.articles.rows == []
     assert harness.collections.rows == []
+
+
+async def test_the_report_counts_unreadable_items_of_each_collection() -> None:
+    harness = Harness(rss_source(1, FEED_A), subscribed=[1])
+    untitled = b"<item><link>https://example.com/untitled</link></item>"
+    harness.serve(FEED_A, ok(feed("One").replace(b"</channel>", untitled + b"</channel>")))
+
+    report = await harness.run()
+
+    [outcome] = report.collections
+    assert (outcome.collection.article_count, outcome.unreadable_count) == (1, 1)
+    assert outcome.excluded_count == 0

@@ -19,7 +19,8 @@ async def run(container: Container | None = None) -> None:
         logger.info("execution %s finished: %s", execution.id, execution.result)
         for anomaly in execution.anomalies:
             logger.warning("anomaly %s: %s", anomaly.kind, anomaly.detail)
-        for collection in report.collections:
+        for outcome in report.collections:
+            collection = outcome.collection
             logger.info(
                 "collection of source %s: %s, %s new Articles%s",
                 collection.source_id,

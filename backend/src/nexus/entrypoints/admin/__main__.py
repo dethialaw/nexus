@@ -6,7 +6,7 @@ import sys
 from collections.abc import Sequence
 
 from nexus.bootstrap import Container, build_container
-from nexus.core.ingestion.services import subscribe, unsubscribe
+from nexus.core.ingestion.subscriptions import subscribe, unsubscribe
 from nexus.core.profile.services import upsert_user
 from nexus.core.shared.errors import NexusError
 
