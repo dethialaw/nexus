@@ -19,6 +19,7 @@ dependencies = [
 [project.scripts]
 nexus-api = "nexus.entrypoints.api.__main__:main"
 nexus-batch = "nexus.entrypoints.batch.__main__:main"
+nexus-admin = "nexus.entrypoints.admin.__main__:main"
 
 [dependency-groups]
 dev = [
