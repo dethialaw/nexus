@@ -1,10 +1,12 @@
 """Sources."""
 
-from sqlalchemy import select, update
+from datetime import datetime
+
+from sqlalchemy import exists, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from nexus.adapters.persistence.models import SourceRow
+from nexus.adapters.persistence.models import SourceRow, SubscriptionRow
 from nexus.core.ingestion.entities import Connector, DeactivationReason, Source
 from nexus.core.ingestion.source_catalog import CatalogSyncPlan
 
@@ -38,6 +40,20 @@ class SqlSourceRepository:
             select(SourceRow).where(SourceRow.source_key == source_key)
         )
         return None if row is None else source_to_domain(row)
+
+    async def list_to_collect(self) -> tuple[Source, ...]:
+        subscribed = exists().where(SubscriptionRow.source_id == SourceRow.id)
+        rows = await self._session.scalars(
+            select(SourceRow).where(SourceRow.is_active, subscribed).order_by(SourceRow.id)
+        )
+        return tuple(source_to_domain(row) for row in rows)
+
+    async def mark_collected(self, source_id: int, collected_at: datetime) -> None:
+        await self._session.execute(
+            update(SourceRow)
+            .where(SourceRow.id == source_id)
+            .values(last_collected_at=collected_at)
+        )
 
     async def apply_catalog_sync(self, plan: CatalogSyncPlan) -> None:
         common = SourceRow.owner_user_id.is_(None)

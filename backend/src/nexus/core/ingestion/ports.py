@@ -1,9 +1,16 @@
 """Ports of the ingestion section."""
 
+from collections.abc import Sequence
 from datetime import datetime
 from typing import Protocol
 
-from nexus.core.ingestion.entities import Execution, Source
+from nexus.core.ingestion.entities import (
+    Article,
+    Execution,
+    RawArticleBatch,
+    Source,
+    SourceCollection,
+)
 from nexus.core.ingestion.source_catalog import CatalogSyncPlan, RawSourceCatalog
 from nexus.core.profile.ports import UserRepository
 from nexus.core.shared.ports import UnitOfWork
@@ -15,6 +22,14 @@ class SourceCatalogReader(Protocol):
 
         Raises `UnreadableCatalogError` when the file cannot be parsed at all.
         """
+        ...
+
+
+class RawArticleReader(Protocol):
+    """A Connector: reads one Source into raw Articles."""
+
+    async def read(self, source: Source) -> RawArticleBatch:
+        """Raise `CollectionError`, with its cause, when the Collection fails."""
         ...
 
 
@@ -39,6 +54,22 @@ class SourceRepository(Protocol):
 
     async def get_by_key(self, source_key: str) -> Source | None: ...
 
+    async def list_to_collect(self) -> tuple[Source, ...]:
+        """Active Sources with at least one Subscription."""
+        ...
+
+    async def mark_collected(self, source_id: int, collected_at: datetime) -> None: ...
+
+
+class ArticleRepository(Protocol):
+    async def insert_new(self, articles: Sequence[Article]) -> int:
+        """Insert the Articles not yet known to their Source; return how many were inserted."""
+        ...
+
+
+class CollectionRepository(Protocol):
+    async def add(self, collection: SourceCollection) -> None: ...
+
 
 class SubscriptionRepository(Protocol):
     async def add(self, user_id: int, source_id: int, *, created_at: datetime) -> bool:
@@ -56,6 +87,12 @@ class IngestionUnitOfWork(UnitOfWork, Protocol):
 
     @property
     def sources(self) -> SourceRepository: ...
+
+    @property
+    def articles(self) -> ArticleRepository: ...
+
+    @property
+    def collections(self) -> CollectionRepository: ...
 
 
 class SubscriptionUnitOfWork(UnitOfWork, Protocol):

@@ -5,6 +5,8 @@ from typing import Self
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from nexus.adapters.persistence.repositories.article import SqlArticleRepository
+from nexus.adapters.persistence.repositories.collection import SqlCollectionRepository
 from nexus.adapters.persistence.repositories.execution import SqlExecutionRepository
 from nexus.adapters.persistence.repositories.source import SqlSourceRepository
 from nexus.adapters.persistence.repositories.subscription import SqlSubscriptionRepository
@@ -12,6 +14,8 @@ from nexus.adapters.persistence.repositories.user import SqlUserRepository
 
 
 class SqlUnitOfWork:
+    articles: SqlArticleRepository
+    collections: SqlCollectionRepository
     executions: SqlExecutionRepository
     sources: SqlSourceRepository
     subscriptions: SqlSubscriptionRepository
@@ -24,6 +28,8 @@ class SqlUnitOfWork:
     async def __aenter__(self) -> Self:
         self._session = self._session_factory()
         await self._session.begin()
+        self.articles = SqlArticleRepository(self._session)
+        self.collections = SqlCollectionRepository(self._session)
         self.executions = SqlExecutionRepository(self._session)
         self.sources = SqlSourceRepository(self._session)
         self.subscriptions = SqlSubscriptionRepository(self._session)

@@ -1,65 +1,27 @@
-from collections.abc import Mapping, Sequence
-from typing import Any
+"""Seam 2, catalog side: `run_execution` with in-memory repositories."""
 
 import pytest
 
 from nexus.core.ingestion.entities import (
+    Anomaly,
     AnomalyKind,
-    Connector,
     DeactivationReason,
     ExecutionResult,
     FailureCause,
-    Source,
 )
 from nexus.core.ingestion.services import close_execution, open_execution
 from nexus.core.ingestion.source_catalog import UnreadableCatalogError
-from nexus.core.pipeline import ExecutionReport, run_execution
-from tests.unit.fakes import (
-    FakeClock,
-    FakeSourceCatalog,
-    InMemoryExecutionRepository,
-    InMemorySourceRepository,
-    InMemoryUnitOfWork,
-)
+from nexus.core.pipeline import ExecutionReport
+from tests.unit.execution_harness import RMC, RMC_KEY, Harness, reddit, rss, stored_rmc
+from tests.unit.fakes import FakeClock, InMemoryExecutionRepository, InMemoryUnitOfWork
 
 
-def reddit(name: str) -> dict[str, Any]:
-    return {"connector": "reddit", "subreddit": name}
-
-
-RMC = "https://rmcsport.bfmtv.com/rss/football/"
-RMC_KEY = "rss:rmcsport.bfmtv.com/rss/football"
-
-
-def rss(feed_url: str, **config: Any) -> dict[str, Any]:
-    return {"connector": "rss", "feed_url": feed_url, **config}
-
-
-def stored_rmc(config: Mapping[str, Any], reason: DeactivationReason | None = None) -> Source:
-    return Source(
-        id=1,
-        source_key=RMC_KEY,
-        connector=Connector.RSS,
-        config=config,
-        owner_user_id=None,
-        deactivation_reason=reason,
-        last_collected_at=None,
-    )
-
-
-class Harness:
-    def __init__(self, *sources: Source) -> None:
-        self.executions = InMemoryExecutionRepository()
-        self.sources = InMemorySourceRepository(*sources)
-
-    async def run(
-        self, sources: Sequence[Mapping[str, Any]] = (reddit("python"),), **catalog: Any
-    ) -> ExecutionReport:
-        return await run_execution(
-            lambda: InMemoryUnitOfWork(self.executions, self.sources),
-            FakeClock(),
-            FakeSourceCatalog(sources, **catalog),
-        )
+def blocked(report: ExecutionReport) -> list[Anomaly]:
+    return [
+        anomaly
+        for anomaly in report.execution.anomalies
+        if anomaly.kind is AnomalyKind.CATALOG_SYNC_BLOCKED
+    ]
 
 
 async def test_an_execution_is_opened_then_closed_as_success() -> None:
@@ -91,8 +53,7 @@ async def test_an_invalid_config_blocks_the_whole_sync_but_not_the_execution() -
 
     assert sorted(harness.sources.rows) == ["reddit:python"]
     assert report.execution.result is ExecutionResult.SUCCESS
-    [anomaly] = report.execution.anomalies
-    assert anomaly.kind is AnomalyKind.CATALOG_SYNC_BLOCKED
+    [anomaly] = blocked(report)
     assert "r/bad" in anomaly.detail
 
 
@@ -103,8 +64,7 @@ async def test_an_unreadable_catalog_blocks_the_sync_but_not_the_execution() -> 
 
     assert harness.sources.rows == {}
     assert report.execution.result is ExecutionResult.SUCCESS
-    [anomaly] = report.execution.anomalies
-    assert anomaly.kind is AnomalyKind.CATALOG_SYNC_BLOCKED
+    [anomaly] = blocked(report)
     assert "line 3" in anomaly.detail
 
 
@@ -144,7 +104,7 @@ async def test_a_sync_blocked_by_the_threshold_updates_no_config() -> None:
 
     report = await harness.run([rss(RMC, exclude_url_patterns=["_DN-"])])
 
-    assert report.execution.anomalies[0].kind is AnomalyKind.CATALOG_SYNC_BLOCKED
+    assert blocked(report)
     assert report.updated_source_keys == ()
     assert "exclude_url_patterns" not in harness.sources.rows[RMC_KEY].config
 

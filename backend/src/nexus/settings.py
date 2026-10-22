@@ -13,6 +13,12 @@ class Settings(BaseSettings):
     database_url_direct: SecretStr | None = None
     """Direct URL, for Alembic only."""
 
+    fetch_timeout_seconds: float = 30.0
+    """Whole-request limit of every fetch from a publisher's site."""
+
+    fetch_max_bytes: int = 5_000_000
+    """Largest response body read from a publisher's site."""
+
     gemini_api_key: SecretStr | None = None
     langfuse_public_key: SecretStr | None = None
     langfuse_secret_key: SecretStr | None = None

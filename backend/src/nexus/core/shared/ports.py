@@ -1,8 +1,12 @@
 """Ports shared by every core section."""
 
+from dataclasses import dataclass
 from datetime import datetime
+from enum import StrEnum
 from types import TracebackType
 from typing import Protocol, Self
+
+from nexus.core.shared.errors import NexusError
 
 
 class Clock(Protocol):
@@ -27,3 +31,30 @@ class UnitOfWork(Protocol):
     ) -> None: ...
 
     async def commit(self) -> None: ...
+
+
+class FetchUsage(StrEnum):
+    """Why a page is fetched; the adapter derives its protections from it."""
+
+    FEED = "feed"
+    LINKED_PAGE = "linked_page"
+    AGENT_PAGE = "agent_page"
+
+
+@dataclass(frozen=True, slots=True)
+class FetchResponse:
+    status: int
+    body: bytes
+    final_url: str
+
+
+class FetchError(NexusError):
+    """The request could not complete: refused URL, network error, timeout, oversized body."""
+
+
+class HttpFetcher(Protocol):
+    """Every HTTP call to a publisher's site (backend/AGENTS.md, Récupération web)."""
+
+    async def fetch(self, url: str, usage: FetchUsage) -> FetchResponse:
+        """Raise `FetchError` when no response could be read; any status is returned."""
+        ...
