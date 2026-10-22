@@ -3,11 +3,11 @@
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from nexus.adapters.persistence.models import ExecutionRow, SourceRow
+from nexus.adapters.persistence.models import AppUserRow, ExecutionRow, SourceRow, SubscriptionRow
 from nexus.core.ingestion.entities import (
     Anomaly,
     AnomalyKind,
@@ -19,6 +19,7 @@ from nexus.core.ingestion.entities import (
     Source,
 )
 from nexus.core.ingestion.source_catalog import CatalogSyncPlan
+from nexus.core.profile.entities import User
 
 
 def execution_to_domain(row: ExecutionRow) -> Execution:
@@ -89,6 +90,12 @@ class SqlSourceRepository:
         )
         return tuple(source_to_domain(row) for row in rows.scalars())
 
+    async def get_by_key(self, source_key: str) -> Source | None:
+        row = await self._session.scalar(
+            select(SourceRow).where(SourceRow.source_key == source_key)
+        )
+        return None if row is None else source_to_domain(row)
+
     async def apply_catalog_sync(self, plan: CatalogSyncPlan) -> None:
         common = SourceRow.owner_user_id.is_(None)
         if plan.to_insert:
@@ -132,3 +139,57 @@ class SqlSourceRepository:
                 .where(common, SourceRow.source_key == entry.source_key)
                 .values(config=entry.config.model_dump(mode="json"))
             )
+
+
+def user_to_domain(row: AppUserRow) -> User:
+    return User(
+        id=row.id, handle=row.handle, timezone=row.timezone, briefing_hour=row.briefing_hour
+    )
+
+
+class SqlUserRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def upsert(
+        self, handle: str, timezone: str, briefing_hour: int, *, created_at: datetime
+    ) -> User:
+        statement = (
+            insert(AppUserRow)
+            .values(
+                handle=handle, timezone=timezone, briefing_hour=briefing_hour, created_at=created_at
+            )
+            .on_conflict_do_update(
+                index_elements=[AppUserRow.handle],
+                set_={"timezone": timezone, "briefing_hour": briefing_hour},
+            )
+            .returning(AppUserRow)
+        )
+        row = (await self._session.scalars(statement)).one()
+        return user_to_domain(row)
+
+    async def get_by_handle(self, handle: str) -> User | None:
+        row = await self._session.scalar(select(AppUserRow).where(AppUserRow.handle == handle))
+        return None if row is None else user_to_domain(row)
+
+
+class SqlSubscriptionRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def add(self, user_id: int, source_id: int, *, created_at: datetime) -> bool:
+        inserted = await self._session.execute(
+            insert(SubscriptionRow)
+            .values(user_id=user_id, source_id=source_id, created_at=created_at)
+            .on_conflict_do_nothing()
+            .returning(SubscriptionRow.user_id)
+        )
+        return inserted.first() is not None
+
+    async def remove(self, user_id: int, source_id: int) -> bool:
+        deleted = await self._session.execute(
+            delete(SubscriptionRow)
+            .where(SubscriptionRow.user_id == user_id, SubscriptionRow.source_id == source_id)
+            .returning(SubscriptionRow.user_id)
+        )
+        return deleted.first() is not None

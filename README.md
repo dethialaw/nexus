@@ -37,7 +37,14 @@ pnpm install
 pnpm dev
 ```
 
-`uv run nexus-batch` lance une Exécution. Les vérifications à faire avant une PR sont dans `backend/AGENTS.md` et `frontend/AGENTS.md`.
+`uv run nexus-batch` lance une Exécution. Pour que la collecte ait quelque chose à lire, crée ton Utilisateur et abonne-le à des Sources du Catalogue (`uv run nexus-admin --help`) :
+
+```sh
+uv run nexus-admin user upsert --handle moi --timezone Africa/Dakar --briefing-hour 7
+uv run nexus-admin subscribe moi rss:numerama.com/feed
+```
+
+Les vérifications à faire avant une PR sont dans `backend/AGENTS.md` et `frontend/AGENTS.md`.
 
 ## Licence
 

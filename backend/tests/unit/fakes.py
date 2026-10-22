@@ -58,6 +58,9 @@ class InMemorySourceRepository:
     async def list_common(self) -> tuple[Source, ...]:
         return tuple(source for source in self.rows.values() if source.is_common)
 
+    async def get_by_key(self, source_key: str) -> Source | None:
+        return self.rows.get(source_key)
+
     async def apply_catalog_sync(self, plan: CatalogSyncPlan) -> None:
         for entry in plan.to_insert:
             self.rows.setdefault(
