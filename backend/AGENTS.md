@@ -84,4 +84,4 @@ Ports par tâche (`classify`, `summarize`, `briefing`, `chat`, `embed`), prompts
 
 ## Catalogue de Sources
 
-`adapters/source_catalog/source_catalog.toml` (`[[source]]`, `[[retired]]`) ; règles de synchronisation dans `core/ingestion/source_catalog.py` et dans `docs/specs/0001-squelette-du-monorepo.md`. Pour retirer une Source : supprime son bloc `[[source]]` **et** ajoute sa clé à `[[retired]]`.
+`adapters/source_catalog/source_catalog.toml` (`[[source]]`, `[[retired]]`) ; règles de synchronisation dans `core/ingestion/source_catalog.py` et dans les specs 0001 (règles de base) et 0002 (validation, mise à jour des configs). Pour retirer une Source : supprime son bloc `[[source]]` **et** ajoute sa clé à `[[retired]]`.

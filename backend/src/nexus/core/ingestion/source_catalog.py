@@ -1,19 +1,35 @@
 """Source Catalog and its synchronisation with the common Sources.
 
-The rules are listed in `docs/specs/0001-squelette-du-monorepo.md` (Catalogue de Sources).
+The rules are listed in `docs/specs/0001-squelette-du-monorepo.md` (Catalogue de Sources)
+and `docs/specs/0002-ingestion-rss.md` (Synchronisation du Catalogue).
 """
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from typing import Self
+from typing import Any, Self
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError, model_validator
 
 from nexus.core.ingestion.entities import Anomaly, AnomalyKind, DeactivationReason, Source
 from nexus.core.ingestion.source_config import SourceConfig
+from nexus.core.shared.errors import NexusError
+
+_SOURCE_CONFIG: TypeAdapter[SourceConfig] = TypeAdapter(SourceConfig)
 
 MIN_BLOCKING_DISAPPEARANCES = 3
 BLOCKING_DISAPPEARANCE_RATIO = 0.2
+
+
+class UnreadableCatalogError(NexusError):
+    """The catalog file cannot be parsed at all."""
+
+
+@dataclass(frozen=True, slots=True)
+class RawSourceCatalog:
+    """The catalog as read, before validation: one mapping per `[[source]]` block."""
+
+    sources: tuple[Mapping[str, Any], ...]
+    retired: tuple[str, ...]
 
 
 class CatalogEntry(BaseModel):
@@ -31,6 +47,13 @@ class SourceCatalog(BaseModel):
 
     sources: tuple[CatalogEntry, ...]
     retired: tuple[str, ...]
+
+    @classmethod
+    def from_raw(cls, raw: RawSourceCatalog) -> Self:
+        """Validate every block with its Connector's config model; raises `ValidationError`."""
+        return cls.model_validate(
+            {"sources": [{"config": block} for block in raw.sources], "retired": raw.retired}
+        )
 
     @model_validator(mode="after")
     def _unique_keys(self) -> Self:
@@ -52,6 +75,7 @@ class CatalogSyncPlan:
     to_insert: tuple[CatalogEntry, ...] = ()
     to_deactivate: tuple[str, ...] = ()
     to_reactivate: tuple[str, ...] = ()
+    to_update: tuple[CatalogEntry, ...] = ()
     anomaly: Anomaly | None = None
 
 
@@ -83,4 +107,18 @@ def sync_source_catalog(catalog: SourceCatalog, sources: Iterable[Source]) -> Ca
                 if common[key].deactivation_reason is DeactivationReason.REMOVED_FROM_CATALOG
             )
         ),
+        to_update=tuple(
+            entry
+            for entry in catalog.sources
+            if entry.source_key in common
+            and not _same_config(entry.config, common[entry.source_key].config)
+        ),
     )
+
+
+def _same_config(listed: SourceConfig, stored: Mapping[str, Any]) -> bool:
+    """Compare validated configs, so a stored config only differing in form is kept."""
+    try:
+        return listed == _SOURCE_CONFIG.validate_python(stored)
+    except ValidationError:
+        return False

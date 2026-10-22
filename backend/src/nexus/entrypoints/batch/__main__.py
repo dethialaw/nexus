@@ -12,8 +12,15 @@ logger = logging.getLogger("nexus.batch")
 async def run(container: Container | None = None) -> None:
     container = container or build_container()
     try:
-        execution = await run_execution(container.uow_factory, container.clock)
+        report = await run_execution(
+            container.uow_factory, container.clock, container.source_catalog
+        )
+        execution = report.execution
         logger.info("execution %s finished: %s", execution.id, execution.result)
+        for anomaly in execution.anomalies:
+            logger.warning("anomaly %s: %s", anomaly.kind, anomaly.detail)
+        for source_key in report.updated_source_keys:
+            logger.info("catalog sync updated the config of %s", source_key)
     finally:
         await container.dispose()
 

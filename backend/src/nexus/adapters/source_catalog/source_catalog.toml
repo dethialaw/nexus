@@ -9,3 +9,55 @@
 #
 # [[retired]]
 # source_key = "reddit:python"
+
+# Initial catalog: ten broad feeds on three themes, all checked on 2026-10-16
+# (HTTPS, valid XML, no redirect, absolute dates and links). See docs/specs/0002-ingestion-rss.md.
+
+# --- Football ---
+
+[[source]]
+connector = "rss"
+feed_url = "https://feeds.bbci.co.uk/sport/football/rss.xml"
+
+[[source]]
+connector = "rss"
+feed_url = "https://rmcsport.bfmtv.com/rss/football/"
+# Encyclopedic pages re-dated as news.
+exclude_url_patterns = ["_DN-"]
+
+[[source]]
+connector = "rss"
+feed_url = "https://www.footmercato.net/flux-rss"
+
+# --- Tech ---
+
+[[source]]
+connector = "rss"
+feed_url = "https://www.numerama.com/feed/"
+
+[[source]]
+connector = "rss"
+feed_url = "https://www.theverge.com/rss/index.xml"
+
+[[source]]
+connector = "rss"
+feed_url = "https://arstechnica.com/feed/"
+
+[[source]]
+connector = "rss"
+# Temporary: retired when the Hacker News Connector arrives.
+feed_url = "https://hnrss.org/frontpage"
+
+# --- Senegal ---
+
+[[source]]
+connector = "rss"
+feed_url = "https://aps.sn/feed/"
+
+[[source]]
+connector = "rss"
+feed_url = "https://www.seneweb.com/feed"
+
+[[source]]
+connector = "rss"
+feed_url = "https://www.rfi.fr/fr/afrique/rss"

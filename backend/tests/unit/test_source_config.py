@@ -39,6 +39,17 @@ def test_source_keys() -> None:
     assert HackerNewsConfig(feed="top").source_key == "hackernews:top"
 
 
+def test_exclude_url_patterns_do_not_change_the_source_key() -> None:
+    plain = RssConfig(feed_url="https://rmcsport.bfmtv.com/rss/football/")
+    filtered = RssConfig(
+        feed_url="https://rmcsport.bfmtv.com/rss/football/", exclude_url_patterns=("_DN-",)
+    )
+
+    assert plain.exclude_url_patterns == ()
+    assert filtered.exclude_url_patterns == ("_DN-",)
+    assert filtered.source_key == plain.source_key
+
+
 def test_config_is_picked_by_connector() -> None:
     config = TypeAdapter(SourceConfig).validate_python({"connector": "reddit", "subreddit": "rust"})
     assert isinstance(config, RedditConfig)
@@ -48,6 +59,8 @@ def test_config_is_picked_by_connector() -> None:
     "raw",
     [
         {"connector": "rss", "feed_url": "ftp://example.com/feed"},
+        {"connector": "rss", "feed_url": "http://example.com/feed"},
+        {"connector": "rss", "feed_url": "https://example.com/feed", "exclude_url_patterns": [""]},
         {"connector": "reddit", "subreddit": "r/python"},
         {"connector": "hackernews", "feed": "top", "extra": 1},
         {"connector": "unknown"},
