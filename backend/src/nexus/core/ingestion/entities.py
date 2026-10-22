@@ -111,6 +111,8 @@ class RawArticleBatch:
 
     raw_articles: tuple[RawArticle, ...]
     unreadable_count: int
+    # What relative links resolve against: the feed's own URL.
+    base_url: str = ""
 
 
 @dataclass(frozen=True, slots=True)
