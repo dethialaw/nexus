@@ -117,7 +117,7 @@ PK (`user_id`, `article_id`, `interest_version_id`). La Pertinence globale (le m
 
 **`execution`** : `id`, `started_at`, `finished_at`, `result` CHECK (`success`, `partial`, `failed`), `failure_cause` CHECK (`technical`, `collection`) NULL, `error_detail` NULL, `anomalies` jsonb (défaut `[]`) : avertissements qui ne font pas échouer l'Exécution, par exemple `[{"kind": "catalog_sync_blocked", "detail": …}]` ou `feed_moved` (flux déplacé par une redirection permanente, avec l'ancienne et la nouvelle URL).
 
-**`source_collection`** : `id`, `execution_id` (FK, CASCADE), `source_id` (FK), `result` CHECK (`success`, `failed`), `article_count`, `error_detail`, `started_at`, `finished_at`.
+**`source_collection`** : `id`, `execution_id` (FK, CASCADE), `source_id` (FK), `result` CHECK (`success`, `failed`), `article_count`, `unreadable_count` (défaut 0 : éléments du flux ignorés car sans titre ou sans lien), `error_detail`, `started_at`, `finished_at`.
 
 **`briefing_composition`** : `id`, `execution_id` (FK, **ON DELETE SET NULL**), `user_id` (FK, CASCADE), `briefing_date`, `result` CHECK (`normal`, `partial`, `failed`), `failure_cause` NULL, `error_detail` NULL, `created_at`.
 

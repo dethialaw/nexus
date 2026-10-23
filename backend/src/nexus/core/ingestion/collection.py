@@ -77,6 +77,7 @@ async def collect_source(
             source_id=source.id,
             result=CollectionResult.SUCCESS,
             article_count=inserted,
+            unreadable_count=batch.unreadable_count,
             error_detail=None,
             started_at=started_at,
             finished_at=finished_at,

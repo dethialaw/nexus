@@ -161,6 +161,39 @@ def test_unparseable_bytes_are_refused() -> None:
         parse_feed(b"<html><body>Not a feed</body></html>")
 
 
+XXE = b'<!DOCTYPE rss [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>'
+LAUGHS = b'<!DOCTYPE rss [<!ENTITY a "aaaaaaaaaa"><!ENTITY b "&a;&a;&a;&a;&a;&a;&a;&a;&a;&a;">]>'
+ITEM = b"<item><title>T</title><link>https://example.com/t</link></item>"
+
+
+@pytest.mark.parametrize("attack", [XXE, LAUGHS, b"<!-- x --><!doctype rss>"])
+@pytest.mark.parametrize("malformed", [False, True])
+def test_attacks_are_refused_before_parsing_on_well_formed_and_malformed_feeds(
+    attack: bytes, malformed: bool
+) -> None:
+    unclosed = b"<unclosed><&" if malformed else b""
+    body = (
+        b'<?xml version="1.0"?>'
+        + attack
+        + b'<rss version="2.0"><channel>'
+        + unclosed
+        + ITEM
+        + b"</channel></rss>"
+    )
+
+    with pytest.raises(CollectionError, match="refused before parsing"):
+        parse_feed(body)
+
+
+def test_a_feed_whose_items_are_all_unreadable_is_refused() -> None:
+    body = (
+        b'<rss version="2.0"><channel><title>E</title><item><title>A</title></item></channel></rss>'
+    )
+
+    with pytest.raises(CollectionError, match="unreadable"):
+        parse_feed(body)
+
+
 @pytest.mark.parametrize(
     ("link", "expected"),
     [
@@ -194,10 +227,18 @@ def test_guid_url_replaces_a_missing_link_and_other_guids_do_not() -> None:
 
 
 def test_items_without_title_or_link_are_unreadable() -> None:
-    body = rss("<link>https://example.com/a</link>", "<title>No link</title>")
+    body = rss(
+        "<link>https://example.com/a</link>",
+        "<title>No link</title>",
+        item(link="https://example.com/ok"),
+    )
     articles, unreadable, excluded = read_counted(body)
 
-    assert (articles, unreadable, excluded) == ([], 2, 0)
+    assert ([a.canonical_url for a in articles], unreadable, excluded) == (
+        ["https://example.com/ok"],
+        2,
+        0,
+    )
 
 
 def test_excerpt_is_plain_text_with_entities_decoded_even_when_escaped_twice() -> None:

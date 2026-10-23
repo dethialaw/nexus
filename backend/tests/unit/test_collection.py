@@ -192,6 +192,7 @@ async def test_the_report_counts_unreadable_items_of_each_collection() -> None:
     [outcome] = report.collections
     assert (outcome.collection.article_count, outcome.unreadable_count) == (1, 1)
     assert outcome.excluded_count == 0
+    assert outcome.collection.unreadable_count == 1
 
 
 async def fail_repeatedly(harness: Harness, times: int) -> None:

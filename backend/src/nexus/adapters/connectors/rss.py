@@ -61,6 +61,8 @@ def parse_feed(body: bytes, feed_url: str = "") -> RawArticleBatch:
     if not parsed.get("version"):
         raise CollectionError("not a feed: no RSS or Atom document found")
     readable = [raw for entry in parsed.entries if (raw := _raw_article(entry)) is not None]
+    if parsed.entries and not readable:
+        raise CollectionError(f"all {len(parsed.entries)} feed items are unreadable")
     return RawArticleBatch(
         raw_articles=tuple(readable),
         unreadable_count=len(parsed.entries) - len(readable),
@@ -70,7 +72,11 @@ def parse_feed(body: bytes, feed_url: str = "") -> RawArticleBatch:
 
 def _raw_article(entry: Any) -> RawArticle | None:
     title = (entry.get("title") or "").strip()
-    link = (entry.get("link") or "").strip() or _guid_url(entry)
+    link = (entry.get("link") or "").strip()
+    guid = (entry.get("id") or "").strip()
+    if not link or (link == guid and not _is_url(guid)):
+        # feedparser copies a guid into `link` itself, whether or not it is a URL.
+        link = guid if _is_url(guid) else ""
     if not title or not link:
         return None
     contents = [item.get("value") or "" for item in entry.get("content") or []]
@@ -79,9 +85,8 @@ def _raw_article(entry: Any) -> RawArticle | None:
     return RawArticle(title=title, link=link, text=text, published_at=_date(entry))
 
 
-def _guid_url(entry: Any) -> str:
-    guid = (entry.get("id") or "").strip()
-    return guid if urlsplit(guid).scheme in ("http", "https") else ""
+def _is_url(value: str) -> bool:
+    return urlsplit(value).scheme in ("http", "https")
 
 
 def _date(entry: Any) -> datetime | None:
