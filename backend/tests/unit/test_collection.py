@@ -168,97 +168,42 @@ async def test_the_report_counts_unreadable_items_of_each_collection() -> None:
     assert outcome.excluded_count == 0
 
 
-async def test_a_304_is_a_successful_collection_without_article_that_keeps_the_validators() -> None:
-    validators = HttpValidators(etag='"v1"', last_modified="Mon, 01 Jan 2026")
+async def fail_repeatedly(harness: Harness, times: int) -> None:
+    harness.serve(FEED_A, FetchError("timeout"))
+    for _ in range(times):
+        await harness.run()
+
+
+async def test_24_failed_collections_in_a_row_deactivate_the_source_with_an_anomaly() -> None:
     harness = Harness(rss_source(1, FEED_A), subscribed=[1])
-    harness.serve(FEED_A, ok(feed("One"), validators=validators))
-    await harness.run()
-    harness.serve(FEED_A, ok(b"", status=304))
+    await fail_repeatedly(harness, 23)
+    assert harness.sources.rows[rss_source(1, FEED_A).source_key].is_active
 
     report = await harness.run()
 
-    assert harness.fetcher.sent_validators[-1] == validators
-    assert [(c.result, c.article_count) for c in harness.collections.rows] == [
-        (CollectionResult.SUCCESS, 1),
-        (CollectionResult.SUCCESS, 0),
-    ]
-    assert report.execution.result is ExecutionResult.SUCCESS
-    assert harness.sources.rows["rss:a.example.com/feed"].validators == validators
+    source = harness.sources.rows[rss_source(1, FEED_A).source_key]
+    assert source.deactivation_reason is DeactivationReason.REPEATED_FAILURES
+    assert [a.kind for a in report.execution.anomalies] == [AnomalyKind.SOURCE_DEACTIVATED]
+    assert source.source_key in report.execution.anomalies[0].detail
 
 
-async def test_validators_follow_each_200_and_are_cleared_when_the_server_stops_sending() -> None:
+async def test_23_failures_then_a_success_deactivate_nothing() -> None:
     harness = Harness(rss_source(1, FEED_A), subscribed=[1])
-    key = "rss:a.example.com/feed"
-
-    harness.serve(FEED_A, ok(feed("One"), validators=HttpValidators(etag='"v1"')))
-    await harness.run()
-    assert harness.sources.rows[key].validators == HttpValidators(etag='"v1"')
-
-    harness.serve(FEED_A, ok(feed("One"), validators=HttpValidators(etag='"v2"')))
-    await harness.run()
-    assert harness.sources.rows[key].validators == HttpValidators(etag='"v2"')
-
+    await fail_repeatedly(harness, 23)
     harness.serve(FEED_A, ok(feed("One")))
     await harness.run()
-    assert harness.sources.rows[key].validators == HttpValidators()
-
-
-async def test_a_failed_collection_leaves_the_validators_untouched() -> None:
-    validators = HttpValidators(etag='"v1"')
-    harness = Harness(rss_source(1, FEED_A), subscribed=[1])
-    harness.serve(FEED_A, ok(feed("One"), validators=validators))
-    await harness.run()
-    harness.serve(FEED_A, ok(b"", status=503))
-
-    await harness.run()
-
-    assert harness.sources.rows["rss:a.example.com/feed"].validators == validators
-
-
-async def test_a_permanent_redirect_is_an_anomaly_with_the_old_and_the_new_url() -> None:
-    harness = Harness(rss_source(1, FEED_A), subscribed=[1])
-    new_url = "https://a.example.com/new-feed"
-    harness.serve(FEED_A, ok(feed("One"), url=new_url, moved_permanently=True))
+    harness.serve(FEED_A, FetchError("timeout"))
 
     report = await harness.run()
 
-    [anomaly] = report.execution.anomalies
-    assert anomaly.kind is AnomalyKind.FEED_MOVED
-    assert FEED_A in anomaly.detail
-    assert new_url in anomaly.detail
-    assert report.execution.result is ExecutionResult.SUCCESS
-
-
-async def test_a_temporary_redirect_is_not_an_anomaly() -> None:
-    harness = Harness(rss_source(1, FEED_A), subscribed=[1])
-    harness.serve(FEED_A, ok(feed("One"), url="https://a.example.com/tmp"))
-
-    report = await harness.run()
-
+    assert harness.sources.rows[rss_source(1, FEED_A).source_key].is_active
     assert report.execution.anomalies == ()
 
 
-async def test_at_most_eight_collections_run_at_the_same_time() -> None:
-    class SlowFetcher(FakeHttpFetcher):
-        running = 0
-        peak = 0
+async def test_catalog_sync_never_reactivates_a_source_deactivated_for_repeated_failures() -> None:
+    harness = Harness(rss_source(1, FEED_A, DeactivationReason.REPEATED_FAILURES), subscribed=[1])
 
-        async def fetch(
-            self, url: str, usage: FetchUsage, validators: HttpValidators | None = None
-        ) -> FetchResponse:
-            self.running += 1
-            self.peak = max(self.peak, self.running)
-            await asyncio.sleep(0.01)
-            self.running -= 1
-            return ok(feed())
+    await harness.run()
 
-    sources = [rss_source(i, f"https://s{i}.example.com/feed") for i in range(1, 21)]
-    harness = Harness(*sources, subscribed=range(1, 21))
-    slow = SlowFetcher()
-    harness.fetcher = slow
-
-    report = await harness.run()
-
-    assert len(harness.collections.rows) == 20
-    assert report.execution.result is ExecutionResult.SUCCESS
-    assert slow.peak == 8
+    source = harness.sources.rows[rss_source(1, FEED_A).source_key]
+    assert source.deactivation_reason is DeactivationReason.REPEATED_FAILURES

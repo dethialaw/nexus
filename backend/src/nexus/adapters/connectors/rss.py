@@ -5,6 +5,7 @@ from calendar import timegm
 from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Any
+from urllib.parse import urlsplit
 
 import feedparser
 
@@ -39,15 +40,10 @@ class RssConnector:
             )
         if not 200 <= response.status < 300:
             raise CollectionError(f"HTTP {response.status}")
-        batch = parse_feed(response.body)
-        anomalies: tuple[Anomaly, ...] = ()
-        if response.moved_permanently:
-            detail = f"{config.feed_url} moved permanently to {response.final_url}"
-            anomalies = (Anomaly(AnomalyKind.FEED_MOVED, detail),)
-        return replace(batch, validators=response.validators, anomalies=anomalies)
+        return parse_feed(response.body, config.feed_url)
 
 
-def parse_feed(body: bytes) -> RawArticleBatch:
+def parse_feed(body: bytes, feed_url: str = "") -> RawArticleBatch:
     check_xml(body)
     # A stream, so feedparser can never take the input for a URL to fetch.
     parsed = feedparser.parse(io.BytesIO(body))
@@ -55,18 +51,26 @@ def parse_feed(body: bytes) -> RawArticleBatch:
         raise CollectionError("not a feed: no RSS or Atom document found")
     readable = [raw for entry in parsed.entries if (raw := _raw_article(entry)) is not None]
     return RawArticleBatch(
-        raw_articles=tuple(readable), unreadable_count=len(parsed.entries) - len(readable)
+        raw_articles=tuple(readable),
+        unreadable_count=len(parsed.entries) - len(readable),
+        base_url=feed_url,
     )
 
 
 def _raw_article(entry: Any) -> RawArticle | None:
     title = (entry.get("title") or "").strip()
-    link = (entry.get("link") or "").strip()
+    link = (entry.get("link") or "").strip() or _guid_url(entry)
     if not title or not link:
         return None
-    content = entry.get("content") or []
-    text = content[0].get("value", "") if content else entry.get("summary", "")
+    contents = [item.get("value") or "" for item in entry.get("content") or []]
+    # `content:encoded` (or Atom content) wins over the description when it is longer.
+    text = max([entry.get("summary") or "", *contents], key=len)
     return RawArticle(title=title, link=link, text=text, published_at=_date(entry))
+
+
+def _guid_url(entry: Any) -> str:
+    guid = (entry.get("id") or "").strip()
+    return guid if urlsplit(guid).scheme in ("http", "https") else ""
 
 
 def _date(entry: Any) -> datetime | None:

@@ -9,6 +9,7 @@ from dataclasses import dataclass
 
 from nexus.core.ingestion.catalog_sync import synchronize_source_catalog
 from nexus.core.ingestion.collection import (
+    MAX_CONSECUTIVE_FAILURES,
     CollectionOutcome,
     collect_source,
     list_sources_to_collect,
@@ -82,6 +83,14 @@ async def run_execution(
             error_detail=f"{type(error).__name__}: {error}",
         )
         raise
+    anomalies.extend(
+        Anomaly(
+            AnomalyKind.SOURCE_DEACTIVATED,
+            f"{source.source_key} deactivated after {MAX_CONSECUTIVE_FAILURES} failed Collections",
+        )
+        for source, outcome in zip(sources, outcomes, strict=True)
+        if outcome.deactivated
+    )
     result = _result([outcome.collection for outcome in outcomes])
     closed = await close_execution(
         uow_factory(),

@@ -63,6 +63,25 @@ class SqlSourceRepository:
             )
         )
 
+    async def deactivate_for_repeated_failures(self, source_id: int) -> bool:
+        result = await self._session.execute(
+            update(SourceRow)
+            .where(SourceRow.id == source_id, SourceRow.is_active)
+            .values(
+                is_active=False,
+                deactivation_reason=str(DeactivationReason.REPEATED_FAILURES),
+            )
+        )
+        return bool(result.rowcount)  # type: ignore[attr-defined]
+
+    async def reactivate(self, source_id: int) -> bool:
+        result = await self._session.execute(
+            update(SourceRow)
+            .where(SourceRow.id == source_id, SourceRow.is_active.is_(False))
+            .values(is_active=True, deactivation_reason=None)
+        )
+        return bool(result.rowcount)  # type: ignore[attr-defined]
+
     async def apply_catalog_sync(self, plan: CatalogSyncPlan) -> None:
         common = SourceRow.owner_user_id.is_(None)
         if plan.to_insert:
