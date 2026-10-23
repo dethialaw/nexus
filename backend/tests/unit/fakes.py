@@ -9,13 +9,14 @@ from typing import Any, Self
 
 from nexus.core.ingestion.entities import (
     Article,
+    CollectionResult,
     DeactivationReason,
     Execution,
     Source,
     SourceCollection,
 )
 from nexus.core.ingestion.source_catalog import CatalogSyncPlan, RawSourceCatalog
-from nexus.core.shared.ports import FetchError, FetchResponse, FetchUsage
+from nexus.core.shared.ports import FetchError, FetchResponse, FetchUsage, HttpValidators
 
 
 class FakeClock:
@@ -51,9 +52,13 @@ class FakeHttpFetcher:
     def __init__(self, responses: Mapping[str, FetchResponse | FetchError] | None = None) -> None:
         self.responses = dict(responses or {})
         self.requested: list[str] = []
+        self.sent_validators: list[HttpValidators | None] = []
 
-    async def fetch(self, url: str, usage: FetchUsage) -> FetchResponse:
+    async def fetch(
+        self, url: str, usage: FetchUsage, validators: HttpValidators | None = None
+    ) -> FetchResponse:
         self.requested.append(url)
+        self.sent_validators.append(validators)
         response = self.responses[url]
         if isinstance(response, FetchError):
             raise response
@@ -92,10 +97,30 @@ class InMemorySourceRepository:
     async def get_by_key(self, source_key: str) -> Source | None:
         return self.rows.get(source_key)
 
-    async def mark_collected(self, source_id: int, collected_at: datetime) -> None:
+    async def mark_collected(
+        self, source_id: int, collected_at: datetime, validators: HttpValidators
+    ) -> None:
         for key, source in self.rows.items():
             if source.id == source_id:
-                self.rows[key] = replace(source, last_collected_at=collected_at)
+                self.rows[key] = replace(
+                    source, last_collected_at=collected_at, validators=validators
+                )
+
+    async def deactivate_for_repeated_failures(self, source_id: int) -> bool:
+        for key, source in self.rows.items():
+            if source.id == source_id and source.is_active:
+                self.rows[key] = replace(
+                    source, deactivation_reason=DeactivationReason.REPEATED_FAILURES
+                )
+                return True
+        return False
+
+    async def reactivate(self, source_id: int) -> bool:
+        for key, source in self.rows.items():
+            if source.id == source_id and not source.is_active:
+                self.rows[key] = replace(source, deactivation_reason=None)
+                return True
+        return False
 
     async def apply_catalog_sync(self, plan: CatalogSyncPlan) -> None:
         for entry in plan.to_insert:
@@ -152,6 +177,10 @@ class InMemoryCollectionRepository:
 
     async def add(self, collection: SourceCollection) -> None:
         self.rows.append(collection)
+
+    async def recent_results(self, source_id: int, limit: int) -> tuple[CollectionResult, ...]:
+        own = [row.result for row in self.rows if row.source_id == source_id]
+        return tuple(reversed(own[-limit:]))
 
 
 class InMemoryUnitOfWork:

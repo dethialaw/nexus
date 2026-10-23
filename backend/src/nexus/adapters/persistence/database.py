@@ -12,6 +12,9 @@ from sqlalchemy.ext.asyncio import (
 
 from nexus.adapters.persistence.guards import GuardedSession
 
+# 8 concurrent Collections, the Execution and one spare.
+POOL_SIZE = 10
+
 
 def create_engine(url: str) -> AsyncEngine:
     """Engine safe behind Neon's pooler (PgBouncer in transaction mode).
@@ -21,6 +24,7 @@ def create_engine(url: str) -> AsyncEngine:
     """
     return create_async_engine(
         url,
+        pool_size=POOL_SIZE,
         pool_pre_ping=True,
         connect_args={
             "statement_cache_size": 0,

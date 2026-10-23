@@ -9,9 +9,11 @@ from nexus.core.ingestion.entities import (
     SourceCollection,
 )
 from nexus.core.ingestion.errors import CollectionError
-from nexus.core.ingestion.normalization import to_article
+from nexus.core.ingestion.normalization import normalize_batch
 from nexus.core.ingestion.ports import IngestionUnitOfWork, RawArticleReader
 from nexus.core.shared.ports import Clock
+
+MAX_CONSECUTIVE_FAILURES = 24
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,6 +23,7 @@ class CollectionOutcome:
     collection: SourceCollection
     unreadable_count: int = 0
     excluded_count: int = 0
+    deactivated: bool = False
 
 
 async def list_sources_to_collect(uow: IngestionUnitOfWork) -> tuple[Source, ...]:
@@ -56,10 +59,16 @@ async def collect_source(
         )
         async with uow:
             await uow.collections.add(failed)
+            recent = await uow.collections.recent_results(source.id, MAX_CONSECUTIVE_FAILURES)
+            deactivated = len(recent) == MAX_CONSECUTIVE_FAILURES and all(
+                result is CollectionResult.FAILED for result in recent
+            )
+            if deactivated:
+                deactivated = await uow.sources.deactivate_for_repeated_failures(source.id)
             await uow.commit()
-        return CollectionOutcome(collection=failed)
+        return CollectionOutcome(collection=failed, deactivated=deactivated)
 
-    articles = [to_article(raw, source.id, started_at) for raw in batch.raw_articles]
+    articles, excluded_count = normalize_batch(batch, source, started_at)
     async with uow:
         inserted = await uow.articles.insert_new(articles)
         finished_at = clock.now()
@@ -68,11 +77,16 @@ async def collect_source(
             source_id=source.id,
             result=CollectionResult.SUCCESS,
             article_count=inserted,
+            unreadable_count=batch.unreadable_count,
             error_detail=None,
             started_at=started_at,
             finished_at=finished_at,
         )
         await uow.collections.add(collection)
-        await uow.sources.mark_collected(source.id, finished_at)
+        await uow.sources.mark_collected(source.id, finished_at, batch.validators)
         await uow.commit()
-    return CollectionOutcome(collection=collection, unreadable_count=batch.unreadable_count)
+    return CollectionOutcome(
+        collection=collection,
+        unreadable_count=batch.unreadable_count,
+        excluded_count=excluded_count,
+    )

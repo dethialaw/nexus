@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from nexus.adapters.persistence.models import SourceRow, SubscriptionRow
 from nexus.core.ingestion.entities import Connector, DeactivationReason, Source
 from nexus.core.ingestion.source_catalog import CatalogSyncPlan
+from nexus.core.shared.ports import HttpValidators
 
 
 def source_to_domain(row: SourceRow) -> Source:
@@ -22,6 +23,7 @@ def source_to_domain(row: SourceRow) -> Source:
             None if row.deactivation_reason is None else DeactivationReason(row.deactivation_reason)
         ),
         last_collected_at=row.last_collected_at,
+        validators=HttpValidators(etag=row.http_etag, last_modified=row.http_last_modified),
     )
 
 
@@ -48,12 +50,37 @@ class SqlSourceRepository:
         )
         return tuple(source_to_domain(row) for row in rows)
 
-    async def mark_collected(self, source_id: int, collected_at: datetime) -> None:
+    async def mark_collected(
+        self, source_id: int, collected_at: datetime, validators: HttpValidators
+    ) -> None:
         await self._session.execute(
             update(SourceRow)
             .where(SourceRow.id == source_id)
-            .values(last_collected_at=collected_at)
+            .values(
+                last_collected_at=collected_at,
+                http_etag=validators.etag,
+                http_last_modified=validators.last_modified,
+            )
         )
+
+    async def deactivate_for_repeated_failures(self, source_id: int) -> bool:
+        result = await self._session.execute(
+            update(SourceRow)
+            .where(SourceRow.id == source_id, SourceRow.is_active)
+            .values(
+                is_active=False,
+                deactivation_reason=str(DeactivationReason.REPEATED_FAILURES),
+            )
+        )
+        return bool(result.rowcount)  # type: ignore[attr-defined]
+
+    async def reactivate(self, source_id: int) -> bool:
+        result = await self._session.execute(
+            update(SourceRow)
+            .where(SourceRow.id == source_id, SourceRow.is_active.is_(False))
+            .values(is_active=True, deactivation_reason=None)
+        )
+        return bool(result.rowcount)  # type: ignore[attr-defined]
 
     async def apply_catalog_sync(self, plan: CatalogSyncPlan) -> None:
         common = SourceRow.owner_user_id.is_(None)

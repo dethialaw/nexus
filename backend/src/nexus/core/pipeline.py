@@ -3,11 +3,13 @@
 Compositions come next.
 """
 
+import asyncio
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 
 from nexus.core.ingestion.catalog_sync import synchronize_source_catalog
 from nexus.core.ingestion.collection import (
+    MAX_CONSECUTIVE_FAILURES,
     CollectionOutcome,
     collect_source,
     list_sources_to_collect,
@@ -20,11 +22,14 @@ from nexus.core.ingestion.entities import (
     Execution,
     ExecutionResult,
     FailureCause,
+    Source,
     SourceCollection,
 )
 from nexus.core.ingestion.ports import IngestionUnitOfWork, RawArticleReader, SourceCatalogReader
 from nexus.core.ingestion.services import close_execution, open_execution
 from nexus.core.shared.ports import Clock
+
+MAX_CONCURRENT_COLLECTIONS = 8
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,12 +56,22 @@ async def run_execution(
             anomalies.append(
                 Anomaly(AnomalyKind.NO_SOURCE_TO_COLLECT, "no active Source has a Subscription")
             )
-        outcomes = [
-            await collect_source(
-                uow_factory(), connectors.get(source.connector), clock, execution, source
-            )
-            for source in sources
-        ]
+        slots = asyncio.Semaphore(MAX_CONCURRENT_COLLECTIONS)
+
+        async def collect(source: Source) -> CollectionOutcome:
+            async with slots:
+                return await collect_source(
+                    uow_factory(), connectors.get(source.connector), clock, execution, source
+                )
+
+        # Every Collection ends before the Execution does, even when one of them breaks.
+        settled = await asyncio.gather(
+            *(collect(source) for source in sources), return_exceptions=True
+        )
+        for item in settled:
+            if isinstance(item, BaseException):
+                raise item
+        outcomes = [item for item in settled if isinstance(item, CollectionOutcome)]
     except Exception as error:
         await close_execution(
             uow_factory(),
@@ -67,6 +82,14 @@ async def run_execution(
             error_detail=f"{type(error).__name__}: {error}",
         )
         raise
+    anomalies.extend(
+        Anomaly(
+            AnomalyKind.SOURCE_DEACTIVATED,
+            f"{source.source_key} deactivated after {MAX_CONSECUTIVE_FAILURES} failed Collections",
+        )
+        for source, outcome in zip(sources, outcomes, strict=True)
+        if outcome.deactivated
+    )
     result = _result([outcome.collection for outcome in outcomes])
     closed = await close_execution(
         uow_factory(),

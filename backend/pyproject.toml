@@ -7,14 +7,14 @@ requires-python = ">=3.13"
 dependencies = [
     "alembic>=1.16",
     "asyncpg>=0.30",
-    "fastapi>=0.118",
+    "fastapi>=0.149.0",
     "feedparser>=6.0.14",
-    "httpx2>=2.13.1",
+    "httpx2>=2.14.0",
     "numpy>=2.2",
     "pgvector>=0.4",
     "pydantic>=2.11",
     "pydantic-settings>=2.10",
-    "sqlalchemy[asyncio]>=2.1.4",
+    "sqlalchemy[asyncio]>=2.1.5",
     "tzdata>=2026.5",
     "uvicorn[standard]>=0.54.0",
 ]
@@ -30,7 +30,7 @@ dev = [
     "mypy>=1.18",
     "pytest>=8.4",
     "pytest-asyncio>=1.2",
-    "ruff>=0.13",
+    "ruff>=0.17.1",
 ]
 evals = []
 
