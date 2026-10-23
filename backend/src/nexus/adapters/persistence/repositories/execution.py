@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import update
+from sqlalchemy import delete, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from nexus.adapters.persistence.models import ExecutionRow
@@ -58,3 +58,10 @@ class SqlExecutionRepository:
                 anomalies=_anomalies_to_row(execution.anomalies),
             )
         )
+
+    async def delete_started_before(self, cutoff: datetime) -> int:
+        # Collections go with their Execution (ON DELETE CASCADE); Compositions are kept.
+        deleted = await self._session.scalars(
+            delete(ExecutionRow).where(ExecutionRow.started_at < cutoff).returning(ExecutionRow.id)
+        )
+        return len(deleted.all())
