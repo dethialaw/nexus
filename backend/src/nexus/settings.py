@@ -21,7 +21,7 @@ class Settings(FetchSettings):
     """Application URL: Neon's pooler in production."""
 
     database_url_direct: SecretStr | None = None
-    """Direct URL, for Alembic only."""
+    """Direct URL, for Alembic and the Execution lock."""
 
     gemini_api_key: SecretStr | None = None
     langfuse_public_key: SecretStr | None = None
