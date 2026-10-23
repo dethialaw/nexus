@@ -121,6 +121,35 @@ class RawArticleBatch:
     validators: HttpValidators = field(default_factory=HttpValidators)
 
 
+class FeedItemStatus(StrEnum):
+    KEPT = "kept"
+    EXCLUDED = "excluded"
+    TOO_OLD = "too_old"
+
+
+@dataclass(frozen=True, slots=True)
+class FeedItem:
+    title: str
+    url: str
+    published_at: datetime | None
+    status: FeedItemStatus
+
+
+@dataclass(frozen=True, slots=True)
+class FeedCheck:
+    """What `nexus-admin source check` learned from a feed; nothing of it is stored."""
+
+    feed_url: str
+    final_url: str
+    status: int
+    not_modified: bool
+    validators: HttpValidators
+    items: tuple[FeedItem, ...]
+    unreadable_count: int
+    excluded_count: int
+    anomalies: tuple["Anomaly", ...] = ()
+
+
 @dataclass(frozen=True, slots=True)
 class Article:
     """A normalized Article, ready to be inserted."""

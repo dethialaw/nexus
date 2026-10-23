@@ -4,20 +4,24 @@ from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-class Settings(BaseSettings):
+class FetchSettings(BaseSettings):
+    """What the web fetcher needs: no database configuration."""
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
-
-    database_url: SecretStr
-    """Application URL: Neon's pooler in production."""
-
-    database_url_direct: SecretStr | None = None
-    """Direct URL, for Alembic and the Execution lock."""
 
     fetch_timeout_seconds: float = 30.0
     """Limit of each request to a publisher's site, redirects included one by one."""
 
     fetch_max_bytes: int = 5_000_000
     """Largest response body read from a publisher's site."""
+
+
+class Settings(FetchSettings):
+    database_url: SecretStr
+    """Application URL: Neon's pooler in production."""
+
+    database_url_direct: SecretStr | None = None
+    """Direct URL, for Alembic and the Execution lock."""
 
     gemini_api_key: SecretStr | None = None
     langfuse_public_key: SecretStr | None = None
