@@ -6,6 +6,7 @@ from typing import Protocol
 
 from nexus.core.ingestion.entities import (
     Article,
+    CollectionResult,
     Execution,
     RawArticleBatch,
     Source,
@@ -60,6 +61,14 @@ class SourceRepository(Protocol):
 
     async def mark_collected(self, source_id: int, collected_at: datetime) -> None: ...
 
+    async def deactivate_for_repeated_failures(self, source_id: int) -> bool:
+        """Deactivate an active Source (`repeated_failures`); False when already inactive."""
+        ...
+
+    async def reactivate(self, source_id: int) -> bool:
+        """Reactivate an inactive Source; False when it was already active."""
+        ...
+
 
 class ArticleRepository(Protocol):
     async def insert_new(self, articles: Sequence[Article]) -> int:
@@ -69,6 +78,10 @@ class ArticleRepository(Protocol):
 
 class CollectionRepository(Protocol):
     async def add(self, collection: SourceCollection) -> None: ...
+
+    async def recent_results(self, source_id: int, limit: int) -> tuple[CollectionResult, ...]:
+        """Results of the last Collections of a Source, the most recent first."""
+        ...
 
 
 class SubscriptionRepository(Protocol):
@@ -93,6 +106,11 @@ class IngestionUnitOfWork(UnitOfWork, Protocol):
 
     @property
     def collections(self) -> CollectionRepository: ...
+
+
+class SourceUnitOfWork(UnitOfWork, Protocol):
+    @property
+    def sources(self) -> SourceRepository: ...
 
 
 class SubscriptionUnitOfWork(UnitOfWork, Protocol):

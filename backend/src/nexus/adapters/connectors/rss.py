@@ -4,7 +4,7 @@ import io
 from calendar import timegm
 from datetime import UTC, datetime
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import urlsplit
 
 import feedparser
 
@@ -27,10 +27,10 @@ class RssConnector:
             raise CollectionError(str(error)) from error
         if not 200 <= response.status < 300:
             raise CollectionError(f"HTTP {response.status}")
-        return parse_feed(response.body)
+        return parse_feed(response.body, config.feed_url)
 
 
-def parse_feed(body: bytes) -> RawArticleBatch:
+def parse_feed(body: bytes, feed_url: str = "") -> RawArticleBatch:
     check_xml(body)
     # A stream, so feedparser can never take the input for a URL to fetch.
     parsed = feedparser.parse(io.BytesIO(body))
@@ -40,7 +40,9 @@ def parse_feed(body: bytes) -> RawArticleBatch:
     if parsed.entries and not readable:
         raise CollectionError(f"all {len(parsed.entries)} feed items are unreadable")
     return RawArticleBatch(
-        raw_articles=tuple(readable), unreadable_count=len(parsed.entries) - len(readable)
+        raw_articles=tuple(readable),
+        unreadable_count=len(parsed.entries) - len(readable),
+        base_url=feed_url,
     )
 
 
@@ -53,13 +55,14 @@ def _raw_article(entry: Any) -> RawArticle | None:
         link = guid if _is_url(guid) else ""
     if not title or not link:
         return None
-    content = entry.get("content") or []
-    text = content[0].get("value", "") if content else entry.get("summary", "")
+    contents = [item.get("value") or "" for item in entry.get("content") or []]
+    # `content:encoded` (or Atom content) wins over the description when it is longer.
+    text = max([entry.get("summary") or "", *contents], key=len)
     return RawArticle(title=title, link=link, text=text, published_at=_date(entry))
 
 
 def _is_url(value: str) -> bool:
-    return urlparse(value).scheme in ("http", "https")
+    return urlsplit(value).scheme in ("http", "https")
 
 
 def _date(entry: Any) -> datetime | None:

@@ -55,6 +55,7 @@ class CollectionResult(StrEnum):
 class AnomalyKind(StrEnum):
     CATALOG_SYNC_BLOCKED = "catalog_sync_blocked"
     NO_SOURCE_TO_COLLECT = "no_source_to_collect"
+    SOURCE_DEACTIVATED = "source_deactivated"
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,6 +112,8 @@ class RawArticleBatch:
 
     raw_articles: tuple[RawArticle, ...]
     unreadable_count: int
+    # What relative links resolve against: the feed's own URL.
+    base_url: str = ""
 
 
 @dataclass(frozen=True, slots=True)

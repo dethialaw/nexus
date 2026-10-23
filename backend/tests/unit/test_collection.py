@@ -161,3 +161,44 @@ async def test_the_report_counts_unreadable_items_of_each_collection() -> None:
     assert (outcome.collection.article_count, outcome.unreadable_count) == (1, 1)
     assert outcome.excluded_count == 0
     assert outcome.collection.unreadable_count == 1
+
+
+async def fail_repeatedly(harness: Harness, times: int) -> None:
+    harness.serve(FEED_A, FetchError("timeout"))
+    for _ in range(times):
+        await harness.run()
+
+
+async def test_24_failed_collections_in_a_row_deactivate_the_source_with_an_anomaly() -> None:
+    harness = Harness(rss_source(1, FEED_A), subscribed=[1])
+    await fail_repeatedly(harness, 23)
+    assert harness.sources.rows[rss_source(1, FEED_A).source_key].is_active
+
+    report = await harness.run()
+
+    source = harness.sources.rows[rss_source(1, FEED_A).source_key]
+    assert source.deactivation_reason is DeactivationReason.REPEATED_FAILURES
+    assert [a.kind for a in report.execution.anomalies] == [AnomalyKind.SOURCE_DEACTIVATED]
+    assert source.source_key in report.execution.anomalies[0].detail
+
+
+async def test_23_failures_then_a_success_deactivate_nothing() -> None:
+    harness = Harness(rss_source(1, FEED_A), subscribed=[1])
+    await fail_repeatedly(harness, 23)
+    harness.serve(FEED_A, ok(feed("One")))
+    await harness.run()
+    harness.serve(FEED_A, FetchError("timeout"))
+
+    report = await harness.run()
+
+    assert harness.sources.rows[rss_source(1, FEED_A).source_key].is_active
+    assert report.execution.anomalies == ()
+
+
+async def test_catalog_sync_never_reactivates_a_source_deactivated_for_repeated_failures() -> None:
+    harness = Harness(rss_source(1, FEED_A, DeactivationReason.REPEATED_FAILURES), subscribed=[1])
+
+    await harness.run()
+
+    source = harness.sources.rows[rss_source(1, FEED_A).source_key]
+    assert source.deactivation_reason is DeactivationReason.REPEATED_FAILURES
