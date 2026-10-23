@@ -8,11 +8,12 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from nexus.adapters.connectors.rss import RssConnector
 from nexus.adapters.persistence.database import create_engine, create_session_factory, ping
+from nexus.adapters.persistence.execution_lock import PostgresExecutionLock
 from nexus.adapters.persistence.unit_of_work import SqlUnitOfWork
 from nexus.adapters.source_catalog.reader import TomlSourceCatalog
 from nexus.adapters.web.fetcher import WebFetcher
 from nexus.core.ingestion.entities import Connector
-from nexus.core.ingestion.ports import RawArticleReader, SourceCatalogReader
+from nexus.core.ingestion.ports import ExecutionLock, RawArticleReader, SourceCatalogReader
 from nexus.core.shared.ports import Clock
 from nexus.settings import Settings
 
@@ -29,6 +30,7 @@ class Container:
     uow_factory: Callable[[], SqlUnitOfWork]
     source_catalog: SourceCatalogReader
     connectors: Mapping[Connector, RawArticleReader]
+    execution_lock: ExecutionLock
 
     def check_database(self) -> Awaitable[None]:
         return ping(self.engine)
@@ -50,4 +52,9 @@ def build_container(settings: Settings | None = None) -> Container:
         uow_factory=lambda: SqlUnitOfWork(session_factory),
         source_catalog=TomlSourceCatalog(),
         connectors={Connector.RSS: RssConnector(fetcher)},
+        execution_lock=PostgresExecutionLock(
+            settings.database_url_direct.get_secret_value()
+            if settings.database_url_direct
+            else None
+        ),
     )

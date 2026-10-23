@@ -9,6 +9,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy import text
 
 from nexus.adapters.persistence.database import create_engine
+from nexus.adapters.persistence.execution_lock import PostgresExecutionLock
 from tests.integration.conftest import BACKEND_DIR
 
 
@@ -42,3 +43,14 @@ async def test_repeated_queries_through_the_pooler_on_several_connections() -> N
         assert sorted(await asyncio.gather(*(query(n) for n in range(10)))) == list(range(10))
     finally:
         await engine.dispose()
+
+
+async def test_the_execution_lock_is_taken_by_the_direct_connection() -> None:
+    settings = NeonSettings()
+    lock = PostgresExecutionLock(settings.database_url_direct.get_secret_value())
+    other = PostgresExecutionLock(settings.database_url_direct.get_secret_value())
+    assert await lock.acquire()
+    try:
+        assert not await other.acquire()
+    finally:
+        await lock.release()

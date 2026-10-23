@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     """Application URL: Neon's pooler in production."""
 
     database_url_direct: SecretStr | None = None
-    """Direct URL, for Alembic only."""
+    """Direct URL, for Alembic and the Execution lock."""
 
     fetch_timeout_seconds: float = 30.0
     """Limit of each request to a publisher's site, redirects included one by one."""

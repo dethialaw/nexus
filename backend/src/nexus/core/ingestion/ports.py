@@ -126,3 +126,15 @@ class SubscriptionUnitOfWork(UnitOfWork, Protocol):
 
     @property
     def subscriptions(self) -> SubscriptionRepository: ...
+
+
+class ExecutionLock(Protocol):
+    """Lets a single Execution run at a time."""
+
+    async def acquire(self) -> bool:
+        """Take the lock without waiting; False when another Execution holds it."""
+        ...
+
+    async def release(self) -> None:
+        """Give the lock back; a no-op when it is not held."""
+        ...

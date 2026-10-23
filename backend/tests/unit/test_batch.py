@@ -34,6 +34,18 @@ def report(
     )
 
 
+class FakeLock:
+    def __init__(self, available: bool = True) -> None:
+        self.available = available
+        self.released = False
+
+    async def acquire(self) -> bool:
+        return self.available
+
+    async def release(self) -> None:
+        self.released = True
+
+
 class FakeContainer(SimpleNamespace):
     async def dispose(self) -> None:
         self.disposed = True
@@ -44,9 +56,13 @@ async def run_batch(monkeypatch: pytest.MonkeyPatch, fixed: ExecutionReport) -> 
         return fixed
 
     monkeypatch.setattr(batch, "run_execution", fake_run_execution)
-    container = FakeContainer(uow_factory=None, clock=None, source_catalog=None, connectors={})
+    lock = FakeLock()
+    container = FakeContainer(
+        uow_factory=None, clock=None, source_catalog=None, connectors={}, execution_lock=lock
+    )
     code = await batch.run(container)  # type: ignore[arg-type]
     assert container.disposed
+    assert lock.released
     return code
 
 
@@ -105,3 +121,20 @@ async def test_summary_goes_to_the_log_without_step_summary(
 
     assert EXPAT_VERSION in caplog.text
     assert "Execution 1: success" in caplog.text
+
+
+async def test_a_held_lock_creates_no_execution_and_exits_with_zero(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
+    caplog.set_level("INFO", logger="nexus.batch")
+
+    async def fail(*_: Any) -> ExecutionReport:
+        raise AssertionError("no Execution must run while the lock is held")
+
+    monkeypatch.setattr(batch, "run_execution", fail)
+    container = FakeContainer(execution_lock=FakeLock(available=False))
+
+    assert await batch.run(container) == 0  # type: ignore[arg-type]
+    assert container.disposed
+    assert "Exécution précédente encore en cours" in caplog.text

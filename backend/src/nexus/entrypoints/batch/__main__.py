@@ -12,6 +12,8 @@ from nexus.core.pipeline import ExecutionReport, run_execution
 
 logger = logging.getLogger("nexus.batch")
 
+PREVIOUS_EXECUTION_RUNNING = "Exécution précédente encore en cours"
+
 
 def exit_code(report: ExecutionReport) -> int:
     """Non-zero when the maintainer must be alerted; `partial`, `feed_moved` and
@@ -68,9 +70,18 @@ def write_summary(summary: str) -> None:
 async def run(container: Container | None = None) -> int:
     container = container or build_container()
     try:
-        report = await run_execution(
-            container.uow_factory, container.clock, container.source_catalog, container.connectors
-        )
+        if not await container.execution_lock.acquire():
+            write_summary(f"## {PREVIOUS_EXECUTION_RUNNING}\n")
+            return 0
+        try:
+            report = await run_execution(
+                container.uow_factory,
+                container.clock,
+                container.source_catalog,
+                container.connectors,
+            )
+        finally:
+            await container.execution_lock.release()
     finally:
         await container.dispose()
     write_summary(render_summary(report))
