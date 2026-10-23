@@ -58,6 +58,7 @@ class AnomalyKind(StrEnum):
     CATALOG_SYNC_BLOCKED = "catalog_sync_blocked"
     NO_SOURCE_TO_COLLECT = "no_source_to_collect"
     SOURCE_DEACTIVATED = "source_deactivated"
+    FEED_MOVED = "feed_moved"
 
 
 @dataclass(frozen=True, slots=True)
