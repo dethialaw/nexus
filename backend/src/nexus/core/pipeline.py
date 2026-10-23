@@ -72,7 +72,6 @@ async def run_execution(
             if isinstance(item, BaseException):
                 raise item
         outcomes = [item for item in settled if isinstance(item, CollectionOutcome)]
-        anomalies.extend(anomaly for outcome in outcomes for anomaly in outcome.anomalies)
     except Exception as error:
         await close_execution(
             uow_factory(),

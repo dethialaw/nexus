@@ -11,15 +11,13 @@ import feedparser
 
 from nexus.adapters.connectors.xml_guard import check_xml
 from nexus.core.ingestion.entities import (
-    Anomaly,
-    AnomalyKind,
     RawArticle,
     RawArticleBatch,
     Source,
 )
 from nexus.core.ingestion.errors import CollectionError
 from nexus.core.ingestion.source_config import RssConfig
-from nexus.core.shared.ports import FetchError, FetchUsage, HttpFetcher
+from nexus.core.shared.ports import FetchError, FetchUsage, HttpFetcher, HttpValidators
 
 
 class RssConnector:
@@ -36,11 +34,24 @@ class RssConnector:
             raise CollectionError(str(error)) from error
         if response.status == 304:
             return RawArticleBatch(
-                raw_articles=(), unreadable_count=0, validators=source.validators
+                raw_articles=(),
+                unreadable_count=0,
+                validators=HttpValidators(
+                    etag=(
+                        source.validators.etag
+                        if response.validators.etag is None
+                        else response.validators.etag
+                    ),
+                    last_modified=(
+                        source.validators.last_modified
+                        if response.validators.last_modified is None
+                        else response.validators.last_modified
+                    ),
+                ),
             )
         if not 200 <= response.status < 300:
             raise CollectionError(f"HTTP {response.status}")
-        return parse_feed(response.body, config.feed_url)
+        return replace(parse_feed(response.body, config.feed_url), validators=response.validators)
 
 
 def parse_feed(body: bytes, feed_url: str = "") -> RawArticleBatch:

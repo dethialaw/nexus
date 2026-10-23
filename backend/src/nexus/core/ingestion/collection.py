@@ -3,7 +3,6 @@
 from dataclasses import dataclass
 
 from nexus.core.ingestion.entities import (
-    Anomaly,
     CollectionResult,
     Execution,
     Source,

@@ -117,6 +117,7 @@ class RawArticleBatch:
     unreadable_count: int
     # What relative links resolve against: the feed's own URL.
     base_url: str = ""
+    validators: HttpValidators = field(default_factory=HttpValidators)
 
 
 @dataclass(frozen=True, slots=True)
