@@ -174,3 +174,33 @@ async def test_add_a_collection(session_factory: async_sessionmaker[AsyncSession
         "HTTP 503",
     )
     assert (row.started_at, row.finished_at) == (NOW, NOW + timedelta(seconds=2))
+
+
+async def test_recent_results_are_the_latest_first_and_limited(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    source, other = source_row("a"), source_row("b")
+    execution = ExecutionRow(started_at=NOW, anomalies=[])
+    await add(session_factory, source, other, execution)
+    results = [CollectionResult.FAILED, CollectionResult.SUCCESS, CollectionResult.FAILED]
+    async with SqlUnitOfWork(session_factory) as uow:
+        for source_id, result in [(source.id, r) for r in results] + [
+            (other.id, CollectionResult.SUCCESS)
+        ]:
+            await uow.collections.add(
+                SourceCollection(
+                    execution_id=execution.id,
+                    source_id=source_id,
+                    result=result,
+                    article_count=0,
+                    error_detail=None,
+                    started_at=NOW,
+                    finished_at=NOW,
+                )
+            )
+        await uow.commit()
+
+    async with SqlUnitOfWork(session_factory) as uow:
+        recent = await uow.collections.recent_results(source.id, 2)
+
+    assert recent == (CollectionResult.FAILED, CollectionResult.SUCCESS)
