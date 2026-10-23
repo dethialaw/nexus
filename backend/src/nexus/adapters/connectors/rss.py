@@ -11,11 +11,18 @@ import feedparser
 
 from nexus.adapters.connectors.xml_guard import check_xml
 from nexus.core.ingestion.entities import (
+    Anomaly,
+    AnomalyKind,
+    Connector,
+    FeedCheck,
+    FeedItem,
+    FeedItemStatus,
     RawArticle,
     RawArticleBatch,
     Source,
 )
 from nexus.core.ingestion.errors import CollectionError
+from nexus.core.ingestion.normalization import normalize_batch
 from nexus.core.ingestion.source_config import RssConfig
 from nexus.core.shared.ports import FetchError, FetchUsage, HttpFetcher, HttpValidators
 
@@ -52,6 +59,71 @@ class RssConnector:
         if not 200 <= response.status < 300:
             raise CollectionError(f"HTTP {response.status}")
         return replace(parse_feed(response.body, config.feed_url), validators=response.validators)
+
+
+async def check_feed(
+    fetcher: HttpFetcher,
+    feed_url: str,
+    exclude_url_patterns: tuple[str, ...] = (),
+    *,
+    now: datetime,
+) -> FeedCheck:
+    """Fetch and read a feed as a Collection does, without storing anything.
+
+    Raises `CollectionError`, with its cause, when a Collection would fail.
+    """
+    config = RssConfig(feed_url=feed_url, exclude_url_patterns=exclude_url_patterns)
+    try:
+        response = await fetcher.fetch(config.feed_url, FetchUsage.FEED)
+    except FetchError as error:
+        raise CollectionError(str(error)) from error
+    anomalies = (
+        (
+            Anomaly(
+                AnomalyKind.FEED_MOVED,
+                f"{config.feed_url} moved permanently to {response.final_url}",
+            ),
+        )
+        if response.moved_permanently
+        else ()
+    )
+    if response.status == 304:
+        batch = RawArticleBatch(raw_articles=(), unreadable_count=0, base_url=config.feed_url)
+    elif 200 <= response.status < 300:
+        batch = parse_feed(response.body, config.feed_url)
+    else:
+        raise CollectionError(f"HTTP {response.status}")
+    source = Source(
+        id=0,
+        source_key=config.source_key,
+        connector=Connector.RSS,
+        config=config.model_dump(mode="json"),
+        owner_user_id=None,
+        deactivation_reason=None,
+        last_collected_at=None,
+    )
+    items = []
+    for raw in batch.raw_articles:
+        articles, excluded = normalize_batch(replace(batch, raw_articles=(raw,)), source, now)
+        status = (
+            FeedItemStatus.EXCLUDED
+            if excluded
+            else FeedItemStatus.KEPT
+            if articles
+            else FeedItemStatus.TOO_OLD
+        )
+        items.append(FeedItem(raw.title, raw.link, raw.published_at, status))
+    return FeedCheck(
+        feed_url=config.feed_url,
+        final_url=response.final_url,
+        status=response.status,
+        not_modified=response.status == 304,
+        validators=response.validators,
+        items=tuple(items),
+        unreadable_count=batch.unreadable_count,
+        excluded_count=sum(item.status is FeedItemStatus.EXCLUDED for item in items),
+        anomalies=anomalies,
+    )
 
 
 def parse_feed(body: bytes, feed_url: str = "") -> RawArticleBatch:
