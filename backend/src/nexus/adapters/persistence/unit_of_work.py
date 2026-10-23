@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from nexus.adapters.persistence.repositories.article import SqlArticleRepository
 from nexus.adapters.persistence.repositories.collection import SqlCollectionRepository
 from nexus.adapters.persistence.repositories.execution import SqlExecutionRepository
+from nexus.adapters.persistence.repositories.purge_trace import SqlPurgeTraceRepository
 from nexus.adapters.persistence.repositories.source import SqlSourceRepository
 from nexus.adapters.persistence.repositories.subscription import SqlSubscriptionRepository
 from nexus.adapters.persistence.repositories.user import SqlUserRepository
@@ -17,6 +18,7 @@ class SqlUnitOfWork:
     articles: SqlArticleRepository
     collections: SqlCollectionRepository
     executions: SqlExecutionRepository
+    purge_traces: SqlPurgeTraceRepository
     sources: SqlSourceRepository
     subscriptions: SqlSubscriptionRepository
     users: SqlUserRepository
@@ -31,6 +33,7 @@ class SqlUnitOfWork:
         self.articles = SqlArticleRepository(self._session)
         self.collections = SqlCollectionRepository(self._session)
         self.executions = SqlExecutionRepository(self._session)
+        self.purge_traces = SqlPurgeTraceRepository(self._session)
         self.sources = SqlSourceRepository(self._session)
         self.subscriptions = SqlSubscriptionRepository(self._session)
         self.users = SqlUserRepository(self._session)

@@ -1,4 +1,4 @@
-"""Chaining of one Execution: catalog sync, Collections, then close.
+"""Chaining of one Execution: catalog sync, Collections, purge, then close.
 
 Compositions come next.
 """
@@ -26,6 +26,7 @@ from nexus.core.ingestion.entities import (
     SourceCollection,
 )
 from nexus.core.ingestion.ports import IngestionUnitOfWork, RawArticleReader, SourceCatalogReader
+from nexus.core.ingestion.purge import purge_expired
 from nexus.core.ingestion.services import close_execution, open_execution
 from nexus.core.shared.ports import Clock
 
@@ -72,6 +73,7 @@ async def run_execution(
             if isinstance(item, BaseException):
                 raise item
         outcomes = [item for item in settled if isinstance(item, CollectionOutcome)]
+        await purge_expired(uow_factory(), clock)
     except Exception as error:
         await close_execution(
             uow_factory(),

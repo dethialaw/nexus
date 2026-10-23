@@ -16,6 +16,7 @@ from tests.unit.fakes import (
     InMemoryArticleRepository,
     InMemoryCollectionRepository,
     InMemoryExecutionRepository,
+    InMemoryPurgeTraceRepository,
     InMemorySourceRepository,
     InMemoryUnitOfWork,
 )
@@ -76,10 +77,11 @@ def ok(
 
 class Harness:
     def __init__(self, *sources: Source, subscribed: Sequence[int] = ()) -> None:
-        self.executions = InMemoryExecutionRepository()
-        self.sources = InMemorySourceRepository(*sources, subscribed=subscribed)
-        self.articles = InMemoryArticleRepository()
         self.collections = InMemoryCollectionRepository()
+        self.executions = InMemoryExecutionRepository(self.collections)
+        self.sources = InMemorySourceRepository(*sources, subscribed=subscribed)
+        self.purge_traces = InMemoryPurgeTraceRepository()
+        self.articles = InMemoryArticleRepository(self.purge_traces)
         self.fetcher = FakeHttpFetcher()
         self.clock = FakeClock()
 
@@ -97,7 +99,11 @@ class Harness:
         )
         return await run_execution(
             lambda: InMemoryUnitOfWork(
-                self.executions, self.sources, self.articles, self.collections
+                self.executions,
+                self.sources,
+                self.articles,
+                self.collections,
+                self.purge_traces,
             ),
             self.clock,
             FakeSourceCatalog(listed, **catalog),
