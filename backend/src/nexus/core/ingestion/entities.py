@@ -147,3 +147,13 @@ class SourceCollection:
     started_at: datetime
     finished_at: datetime
     unreadable_count: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class PurgeTrace:
+    """What remains of a purged Article: no content, only what recognizes it."""
+
+    source_id: int
+    canonical_url: str
+    fingerprint: str
+    purged_at: datetime

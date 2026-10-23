@@ -43,6 +43,10 @@ class ExecutionRepository(Protocol):
         """Record the end of an Execution: `finished_at`, result, cause and anomalies."""
         ...
 
+    async def delete_started_before(self, cutoff: datetime) -> int:
+        """Delete the Executions started before `cutoff`, with their Collections."""
+        ...
+
 
 class SourceRepository(Protocol):
     async def list_common(self) -> tuple[Source, ...]:
@@ -76,7 +80,21 @@ class SourceRepository(Protocol):
 
 class ArticleRepository(Protocol):
     async def insert_new(self, articles: Sequence[Article]) -> int:
-        """Insert the Articles not yet known to their Source; return how many were inserted."""
+        """Insert the Articles not yet known to their Source; return how many were inserted.
+
+        An Article whose `canonical_url` or fingerprint is in a Purge trace of its Source is not
+        known anew.
+        """
+        ...
+
+    async def purge_collected_before(self, cutoff: datetime, purged_at: datetime) -> int:
+        """Delete the Articles collected before `cutoff`, each leaving a Purge trace."""
+        ...
+
+
+class PurgeTraceRepository(Protocol):
+    async def delete_purged_before(self, cutoff: datetime) -> int:
+        """Delete the Purge traces made before `cutoff`."""
         ...
 
 
@@ -107,6 +125,9 @@ class IngestionUnitOfWork(UnitOfWork, Protocol):
 
     @property
     def articles(self) -> ArticleRepository: ...
+
+    @property
+    def purge_traces(self) -> PurgeTraceRepository: ...
 
     @property
     def collections(self) -> CollectionRepository: ...

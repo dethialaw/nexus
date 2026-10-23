@@ -8,6 +8,7 @@ from nexus.adapters.persistence.models import (
     AppUserRow,
     ArticleRow,
     ExecutionRow,
+    PurgedArticleRow,
     SourceCollectionRow,
     SourceRow,
     SubscriptionRow,
@@ -215,3 +216,79 @@ async def test_recent_results_are_the_latest_first_and_limited(
         recent = await uow.collections.recent_results(source.id, 2)
 
     assert recent == (CollectionResult.FAILED, CollectionResult.SUCCESS)
+
+
+async def test_purge_collected_before_deletes_expired_articles_and_leaves_traces(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    await add(session_factory, source_row("a"))
+    old = replace(
+        article(1, "https://a.example.com/old", "f-old"), collected_at=NOW - timedelta(days=31)
+    )
+    recent = replace(
+        article(1, "https://a.example.com/new", "f-new"), collected_at=NOW - timedelta(days=29)
+    )
+    async with SqlUnitOfWork(session_factory) as uow:
+        await uow.articles.insert_new([old, recent])
+        purged = await uow.articles.purge_collected_before(NOW - timedelta(days=30), NOW)
+        await uow.commit()
+
+    assert purged == 1
+    async with session_factory() as session:
+        urls = (await session.scalars(select(ArticleRow.canonical_url))).all()
+        [trace] = (await session.scalars(select(PurgedArticleRow))).all()
+    assert urls == ["https://a.example.com/new"]
+    assert (trace.source_id, trace.canonical_url, trace.fingerprint, trace.purged_at) == (
+        1,
+        "https://a.example.com/old",
+        "f-old",
+        NOW,
+    )
+
+
+async def test_insert_new_skips_articles_recognized_by_a_purge_trace_of_their_source(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    await add(session_factory, source_row("a"), source_row("b"))
+    await add(
+        session_factory,
+        PurgedArticleRow(
+            source_id=1, canonical_url="https://x/url", fingerprint="f-url", purged_at=NOW
+        ),
+    )
+    candidates = [
+        article(1, "https://x/url", "other"),
+        article(1, "https://x/other", "f-url"),
+        article(1, "https://x/fresh", "f-fresh"),
+        article(2, "https://x/url", "f-url"),
+    ]
+    async with SqlUnitOfWork(session_factory) as uow:
+        inserted = await uow.articles.insert_new(candidates)
+        await uow.commit()
+
+    assert inserted == 2
+    async with session_factory() as session:
+        rows = (await session.execute(select(ArticleRow.source_id, ArticleRow.canonical_url))).all()
+    assert sorted(tuple(r) for r in rows) == [(1, "https://x/fresh"), (2, "https://x/url")]
+
+
+async def test_purge_traces_are_deleted_after_their_retention(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    await add(session_factory, source_row("a"))
+    await add(
+        session_factory,
+        PurgedArticleRow(
+            source_id=1, canonical_url="u1", fingerprint="f1", purged_at=NOW - timedelta(days=366)
+        ),
+        PurgedArticleRow(
+            source_id=1, canonical_url="u2", fingerprint="f2", purged_at=NOW - timedelta(days=364)
+        ),
+    )
+    async with SqlUnitOfWork(session_factory) as uow:
+        deleted = await uow.purge_traces.delete_purged_before(NOW - timedelta(days=365))
+        await uow.commit()
+
+    assert deleted == 1
+    async with session_factory() as session:
+        assert (await session.scalars(select(PurgedArticleRow.fingerprint))).all() == ["f2"]

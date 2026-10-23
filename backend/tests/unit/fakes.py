@@ -12,6 +12,7 @@ from nexus.core.ingestion.entities import (
     CollectionResult,
     DeactivationReason,
     Execution,
+    PurgeTrace,
     Source,
     SourceCollection,
 )
@@ -66,8 +67,9 @@ class FakeHttpFetcher:
 
 
 class InMemoryExecutionRepository:
-    def __init__(self) -> None:
+    def __init__(self, collections: "InMemoryCollectionRepository | None" = None) -> None:
         self.rows: dict[int, Execution] = {}
+        self._collections = collections
 
     async def open(self, started_at: datetime) -> Execution:
         execution = Execution(id=len(self.rows) + 1, started_at=started_at)
@@ -76,6 +78,15 @@ class InMemoryExecutionRepository:
 
     async def close(self, execution: Execution) -> None:
         self.rows[execution.id] = execution
+
+    async def delete_started_before(self, cutoff: datetime) -> int:
+        old = {id_ for id_, execution in self.rows.items() if execution.started_at < cutoff}
+        self.rows = {id_: row for id_, row in self.rows.items() if id_ not in old}
+        if self._collections is not None:
+            self._collections.rows = [
+                row for row in self._collections.rows if row.execution_id not in old
+            ]
+        return len(old)
 
 
 class InMemorySourceRepository:
@@ -151,13 +162,43 @@ class InMemorySourceRepository:
             )
 
 
-class InMemoryArticleRepository:
+class InMemoryPurgeTraceRepository:
     def __init__(self) -> None:
+        self.rows: list[PurgeTrace] = []
+
+    async def delete_purged_before(self, cutoff: datetime) -> int:
+        kept = [row for row in self.rows if row.purged_at >= cutoff]
+        deleted = len(self.rows) - len(kept)
+        self.rows = kept
+        return deleted
+
+
+class InMemoryArticleRepository:
+    def __init__(self, purge_traces: InMemoryPurgeTraceRepository | None = None) -> None:
         self.rows: list[Article] = []
+        self._purge_traces = purge_traces or InMemoryPurgeTraceRepository()
+
+    async def purge_collected_before(self, cutoff: datetime, purged_at: datetime) -> int:
+        expired = [row for row in self.rows if row.collected_at < cutoff]
+        self.rows = [row for row in self.rows if row.collected_at >= cutoff]
+        self._purge_traces.rows.extend(
+            PurgeTrace(row.source_id, row.canonical_url, row.fingerprint, purged_at)
+            for row in expired
+        )
+        return len(expired)
 
     async def insert_new(self, articles: Sequence[Article]) -> int:
         inserted = 0
         for article in articles:
+            if any(
+                trace.source_id == article.source_id
+                and (
+                    trace.canonical_url == article.canonical_url
+                    or trace.fingerprint == article.fingerprint
+                )
+                for trace in self._purge_traces.rows
+            ):
+                continue
             if not any(
                 row.source_id == article.source_id
                 and (
@@ -192,16 +233,24 @@ class InMemoryUnitOfWork:
         sources: InMemorySourceRepository | None = None,
         articles: InMemoryArticleRepository | None = None,
         collections: InMemoryCollectionRepository | None = None,
+        purge_traces: InMemoryPurgeTraceRepository | None = None,
     ) -> None:
         self.executions = executions
         self.sources = sources or InMemorySourceRepository()
-        self.articles = articles or InMemoryArticleRepository()
+        self.purge_traces = purge_traces or InMemoryPurgeTraceRepository()
+        self.articles = articles or InMemoryArticleRepository(self.purge_traces)
         self.collections = collections or InMemoryCollectionRepository()
         self.committed = False
         self._snapshot: list[Any] = []
 
     def _repositories(self) -> list[Any]:
-        return [self.executions, self.sources, self.articles, self.collections]
+        return [
+            self.executions,
+            self.sources,
+            self.articles,
+            self.collections,
+            self.purge_traces,
+        ]
 
     async def __aenter__(self) -> Self:
         self._snapshot = [copy.copy(repository.rows) for repository in self._repositories()]
