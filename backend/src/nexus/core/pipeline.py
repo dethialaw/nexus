@@ -3,6 +3,7 @@
 Compositions come next.
 """
 
+import asyncio
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 
@@ -21,11 +22,14 @@ from nexus.core.ingestion.entities import (
     Execution,
     ExecutionResult,
     FailureCause,
+    Source,
     SourceCollection,
 )
 from nexus.core.ingestion.ports import IngestionUnitOfWork, RawArticleReader, SourceCatalogReader
 from nexus.core.ingestion.services import close_execution, open_execution
 from nexus.core.shared.ports import Clock
+
+MAX_CONCURRENT_COLLECTIONS = 8
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,12 +56,22 @@ async def run_execution(
             anomalies.append(
                 Anomaly(AnomalyKind.NO_SOURCE_TO_COLLECT, "no active Source has a Subscription")
             )
-        outcomes = [
-            await collect_source(
-                uow_factory(), connectors.get(source.connector), clock, execution, source
-            )
-            for source in sources
-        ]
+        slots = asyncio.Semaphore(MAX_CONCURRENT_COLLECTIONS)
+
+        async def collect(source: Source) -> CollectionOutcome:
+            async with slots:
+                return await collect_source(
+                    uow_factory(), connectors.get(source.connector), clock, execution, source
+                )
+
+        # Every Collection ends before the Execution does, even when one of them breaks.
+        settled = await asyncio.gather(
+            *(collect(source) for source in sources), return_exceptions=True
+        )
+        for item in settled:
+            if isinstance(item, BaseException):
+                raise item
+        outcomes = [item for item in settled if isinstance(item, CollectionOutcome)]
     except Exception as error:
         await close_execution(
             uow_factory(),

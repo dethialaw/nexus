@@ -6,6 +6,8 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
+from nexus.core.shared.ports import HttpValidators
+
 
 class Connector(StrEnum):
     RSS = "rss"
@@ -75,6 +77,7 @@ class Source:
     owner_user_id: int | None
     deactivation_reason: DeactivationReason | None
     last_collected_at: datetime | None
+    validators: HttpValidators = field(default_factory=HttpValidators)
 
     @property
     def is_active(self) -> bool:
@@ -114,6 +117,7 @@ class RawArticleBatch:
     unreadable_count: int
     # What relative links resolve against: the feed's own URL.
     base_url: str = ""
+    validators: HttpValidators = field(default_factory=HttpValidators)
 
 
 @dataclass(frozen=True, slots=True)

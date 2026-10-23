@@ -42,19 +42,39 @@ class FetchUsage(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
+class HttpValidators:
+    """What a server sent to let the next request be conditional."""
+
+    etag: str | None = None
+    last_modified: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class FetchResponse:
     status: int
     body: bytes
     final_url: str
+    validators: HttpValidators = HttpValidators()
+    moved_permanently: bool = False
+    """A permanent redirect (301, 308) led from the requested URL to `final_url`."""
 
 
 class FetchError(NexusError):
     """The request could not complete: refused URL, network error, timeout, oversized body."""
 
 
+class BlockedByRobotsError(FetchError):
+    """The publisher's robots.txt forbids the fetch."""
+
+
 class HttpFetcher(Protocol):
     """Every HTTP call to a publisher's site (backend/AGENTS.md, Récupération web)."""
 
-    async def fetch(self, url: str, usage: FetchUsage) -> FetchResponse:
-        """Raise `FetchError` when no response could be read; any status is returned."""
+    async def fetch(
+        self, url: str, usage: FetchUsage, validators: HttpValidators | None = None
+    ) -> FetchResponse:
+        """Send the validators, if any, as a conditional request.
+
+        Raise `FetchError` when no response could be read; any status is returned.
+        """
         ...

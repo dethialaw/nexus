@@ -14,7 +14,7 @@ from nexus.core.ingestion.entities import (
 )
 from nexus.core.ingestion.source_catalog import CatalogSyncPlan, RawSourceCatalog
 from nexus.core.profile.ports import UserRepository
-from nexus.core.shared.ports import UnitOfWork
+from nexus.core.shared.ports import HttpValidators, UnitOfWork
 
 
 class SourceCatalogReader(Protocol):
@@ -59,7 +59,11 @@ class SourceRepository(Protocol):
         """Active Sources with at least one Subscription."""
         ...
 
-    async def mark_collected(self, source_id: int, collected_at: datetime) -> None: ...
+    async def mark_collected(
+        self, source_id: int, collected_at: datetime, validators: HttpValidators
+    ) -> None:
+        """Record a successful Collection: the HTTP validators replace the stored ones."""
+        ...
 
     async def deactivate_for_repeated_failures(self, source_id: int) -> bool:
         """Deactivate an active Source (`repeated_failures`); False when already inactive."""

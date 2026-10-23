@@ -3,6 +3,8 @@
 Every feed here is synthetic, written by hand.
 """
 
+from dataclasses import replace
+
 import pytest
 
 from nexus.core.ingestion.entities import (
@@ -12,7 +14,7 @@ from nexus.core.ingestion.entities import (
     ExecutionResult,
     FailureCause,
 )
-from nexus.core.shared.ports import FetchError
+from nexus.core.shared.ports import FetchError, HttpValidators
 from tests.unit.execution_harness import Harness, ok, rss_source
 
 FEED_A = "https://a.example.com/feed"
@@ -48,6 +50,33 @@ async def test_subscribed_active_sources_are_collected_into_articles() -> None:
     assert harness.sources.rows["rss:a.example.com/feed"].last_collected_at is not None
     assert report.execution.result is ExecutionResult.SUCCESS
     assert report.execution.anomalies == ()
+
+
+async def test_collection_stores_response_validators() -> None:
+    source = rss_source(1, FEED_A)
+    sent_validators = HttpValidators(etag='"v1"', last_modified="Mon, 01 Jan 2026")
+    response_validators = HttpValidators(etag='"v2"', last_modified="Tue, 02 Jan 2026")
+    harness = Harness(replace(source, validators=sent_validators), subscribed=[1])
+    harness.serve(FEED_A, ok(feed("One"), validators=response_validators))
+
+    await harness.run()
+
+    assert harness.fetcher.sent_validators == [sent_validators]
+    assert harness.sources.rows[source.source_key].validators == response_validators
+
+
+async def test_not_modified_collection_preserves_missing_response_validators() -> None:
+    source = rss_source(1, FEED_A)
+    sent_validators = HttpValidators(etag='"v1"', last_modified="Mon, 01 Jan 2026")
+    updated_validators = HttpValidators(etag='"v2"')
+    harness = Harness(replace(source, validators=sent_validators), subscribed=[1])
+    harness.serve(FEED_A, ok(b"", status=304, validators=updated_validators))
+
+    await harness.run()
+
+    assert harness.sources.rows[source.source_key].validators == HttpValidators(
+        etag='"v2"', last_modified="Mon, 01 Jan 2026"
+    )
 
 
 async def test_inactive_or_unsubscribed_sources_are_not_collected() -> None:
@@ -97,7 +126,10 @@ async def test_one_failed_collection_makes_the_execution_partial() -> None:
     ("response", "cause"),
     [
         (ok(b"", status=301), "301"),
+        (ok(b"", status=429), "HTTP 429"),
+        (ok(b"", status=503), "HTTP 503"),
         (FetchError("timeout after 30s"), "timeout"),
+        (FetchError("only https URLs are fetched: http://a.example.com/feed"), "only https"),
         (ok(b'<?xml version="1.0"?><!DOCTYPE rss><rss/>'), "DOCTYPE"),
         (ok(b"<html><body>Not a feed</body></html>"), "not a feed"),
     ],

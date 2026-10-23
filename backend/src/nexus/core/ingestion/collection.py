@@ -82,7 +82,7 @@ async def collect_source(
             finished_at=finished_at,
         )
         await uow.collections.add(collection)
-        await uow.sources.mark_collected(source.id, finished_at)
+        await uow.sources.mark_collected(source.id, finished_at, batch.validators)
         await uow.commit()
     return CollectionOutcome(
         collection=collection,
