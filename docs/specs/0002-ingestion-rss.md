@@ -155,7 +155,7 @@ Les quatre règles de la spec 0001 restent valables. S'y ajoutent :
 ### Lecture d'un flux
 
 **Filtre préalable**, sur les octets, avant toute analyse XML :
-- refus d'un document en UTF-16 ou UTF-32, détecté par BOM ou par la déclaration XML : sinon une déclaration encodée échapperait à la recherche sur les octets alors qu'expat la décoderait ;
+- refus de tout encodage qui n'est pas compatible avec l'ASCII, détecté par les premiers octets (BOM, `<?` en UTF-16 ou UTF-32, `<?xm` en EBCDIC) ou par l'encodage déclaré. Seuls passent l'ASCII, l'UTF-8, l'ISO-8859-* et le Windows-125x, ou l'absence de déclaration. Raison : feedparser décode le document avant de l'analyser, et une déclaration écrite dans un autre encodage échapperait à la recherche sur les octets. L'encodage déclaré est lu comme le fait feedparser, dans toute instruction `<?…?>` en tête du document ;
 - refus de tout document contenant `<!DOCTYPE` ou `<!ENTITY`, sans tenir compte de la casse (l'analyseur tolérant de feedparser n'y est pas sensible), n'importe où, y compris dans un commentaire.
 
 Le refus est une Collecte échouée avec une cause explicite. Aucun des flux vérifiés au cadrage n'a de DOCTYPE. Raison : feedparser ne résout jamais les entités externes, mais son propre filtre de DOCTYPE se contourne par un simple commentaire placé avant ; il ne reste alors contre le billion laughs que la limite d'amplification d'expat, qui dépend de la version liée à Python et coûte déjà environ une seconde et 100 Mo par flux avant d'interrompre l'analyse.

@@ -66,7 +66,7 @@ Une Source protégée contre les robots (403 anti-robots, seul un endpoint non a
 
 ## Analyse XML
 
-Tout XML collecté passe un **filtre préalable** sur les octets, avant tout analyseur : refus d'un encodage UTF-16 ou UTF-32 (BOM ou déclaration XML), puis de toute occurrence de `<!DOCTYPE` ou `<!ENTITY`, sans tenir compte de la casse, commentaires compris. Le filtre de feedparser se contourne par un commentaire, et seule la limite d'amplification d'expat resterait contre le billion laughs. Un refus est une Collecte échouée avec sa cause.
+Tout XML collecté passe un **filtre préalable** sur les octets, avant tout analyseur : refus de tout encodage non compatible avec l'ASCII, détecté par les premiers octets ou déclaré (liste fermée : ASCII, UTF-8, ISO-8859-*, Windows-125x), puis de toute occurrence de `<!DOCTYPE` ou `<!ENTITY`, sans tenir compte de la casse, commentaires compris. Le filtre de feedparser se contourne par un commentaire, et seule la limite d'amplification d'expat resterait contre le billion laughs. Un refus est une Collecte échouée avec sa cause.
 
 ## Passerelle de modèles (`adapters/model_gateway/`)
 
