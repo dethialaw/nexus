@@ -5,6 +5,7 @@ Every feed here is synthetic, written by hand: no publisher content is committed
 
 from datetime import UTC, datetime
 
+import feedparser.encodings
 import pytest
 
 from nexus.adapters.connectors.rss import parse_feed
@@ -149,11 +150,40 @@ def test_fingerprint_ignores_case_spacing_and_punctuation_of_the_title() -> None
         ('﻿<?xml version="1.0"?><rss/>'.encode("utf-32-be"), "UTF-32"),
         (b'<?xml version="1.0" encoding="UTF-16"?><rss/>', "UTF-16"),
         (b"<?xml version='1.0' encoding='utf-32'?><rss/>", "UTF-32"),
+        # Outside the ASCII-compatible list, a DOCTYPE would not show in the raw bytes.
+        ('<?xml version="1.0" encoding="cp037"?><rss/>'.encode("cp037"), "cp037"),
+        ('<?xml version="1.0"?><rss/>'.encode("cp037"), "cp037"),
+        (b'<?xml version="1.0" encoding="shift_jis"?><rss/>', "shift_jis"),
+        (b'<?xml version="1.0" encoding="utf-7"?><rss/>', "utf-7"),
+        (b'<?xml version="1.0" encoding = "cp500" ?><rss/>', "cp500"),
+        (b'<?xml version="1.0" encoding="no-such-codec"?><rss/>', "no-such-codec"),
+        (b'\xef\xbb\xbf<?xml version="1.0" encoding="cp037"?><rss/>', "cp037"),
+        # feedparser reads the encoding of any leading processing instruction on the line.
+        (b'<?xml version="1.0"?><?x encoding="cp037"?><rss/>', "cp037"),
     ],
 )
 def test_prefilter_refuses_before_parsing(body: bytes, cause: str) -> None:
     with pytest.raises(CollectionError, match=cause):
         parse_feed(body)
+
+
+@pytest.mark.parametrize(
+    "encoding", ["UTF-8", "utf8", "us-ascii", "ISO-8859-1", "latin1", "iso-8859-15", "windows-1252"]
+)
+def test_ascii_compatible_encodings_are_read(encoding: str) -> None:
+    body = (
+        f'<?xml version="1.0" encoding="{encoding}"?><rss version="2.0"><channel><title>E</title>'
+        "<item><title>Café</title><link>https://example.com/a</link></item></channel></rss>"
+    )
+
+    [article] = read(body.encode("utf-8" if encoding.lower().startswith("utf") else "latin-1"))
+
+    assert article.title == "Café"
+
+
+def test_feedparser_has_no_encoding_guesser() -> None:
+    # With chardet installed, feedparser would guess encodings the prefilter never saw.
+    assert feedparser.encodings.chardet is None
 
 
 def test_unparseable_bytes_are_refused() -> None:
