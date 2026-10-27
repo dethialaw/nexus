@@ -14,7 +14,7 @@ from nexus.core.ingestion.entities import (
     ExecutionResult,
     FailureCause,
 )
-from nexus.core.shared.ports import FetchError, HttpValidators
+from nexus.core.shared.ports import FetchError, FetchResponse, HttpValidators
 from tests.unit.execution_harness import Harness, ok, rss_source
 
 FEED_A = "https://a.example.com/feed"
@@ -77,6 +77,26 @@ async def test_not_modified_collection_preserves_missing_response_validators() -
     assert harness.sources.rows[source.source_key].validators == HttpValidators(
         etag='"v2"', last_modified="Mon, 01 Jan 2026"
     )
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        ok(feed("One"), url=FEED_B, moved_permanently=True),
+        ok(b"", 304, FEED_B, moved_permanently=True),
+    ],
+)
+async def test_a_permanent_redirect_is_an_anomaly_with_both_urls(response: FetchResponse) -> None:
+    harness = Harness(rss_source(1, FEED_A), subscribed=[1])
+    harness.serve(FEED_A, response)
+
+    report = await harness.run()
+
+    assert report.execution.result is ExecutionResult.SUCCESS
+    [anomaly] = report.execution.anomalies
+    assert anomaly.kind is AnomalyKind.FEED_MOVED
+    assert FEED_A in anomaly.detail
+    assert FEED_B in anomaly.detail
 
 
 async def test_inactive_or_unsubscribed_sources_are_not_collected() -> None:
