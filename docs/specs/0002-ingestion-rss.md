@@ -196,13 +196,15 @@ Le refus est une Collecte échouée avec une cause explicite. Aucun des flux vé
 
 ### Schéma
 
-Une migration, avec la mise à jour de `data-model.md` dans la même PR :
+Deux migrations, chacune avec la mise à jour de `data-model.md` dans la même PR. La première :
 
 - `source` : `http_etag` et `http_last_modified`, texte, facultatifs ;
 - `app_user` : `handle`, texte, **UNIQUE**, au format `^[a-z0-9_-]{3,32}$` ;
 - `article` : l'index (`source_id`, `fingerprint`) devient une contrainte **UNIQUE**, pour que l'écriture idempotente soit garantie par la base ;
 - `article.linked_page_status` : nouvelle valeur `pending` ;
 - nouvelle table `purged_article` : `id`, `source_id` (FK `source`), `canonical_url`, `fingerprint`, `purged_at`, avec index sur (`source_id`, `canonical_url`), sur (`source_id`, `fingerprint`) et sur `purged_at`. Table commune, sans donnée d'Utilisateur (ADR-0003).
+
+La seconde, ajoutée avec l'analyse défensive (#14) : `source_collection.unreadable_count`, entier, défaut 0, pour que le décompte des éléments illisibles soit enregistré avec la Collecte.
 
 ### Administration (`nexus-admin`)
 
