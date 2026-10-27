@@ -84,6 +84,7 @@ async def run_execution(
             error_detail=f"{type(error).__name__}: {error}",
         )
         raise
+    anomalies.extend(anomaly for outcome in outcomes for anomaly in outcome.anomalies)
     anomalies.extend(
         Anomaly(
             AnomalyKind.SOURCE_DEACTIVATED,

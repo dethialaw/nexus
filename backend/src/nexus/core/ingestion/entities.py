@@ -119,6 +119,8 @@ class RawArticleBatch:
     # What relative links resolve against: the feed's own URL.
     base_url: str = ""
     validators: HttpValidators = field(default_factory=HttpValidators)
+    # Warnings for the Execution, such as a feed that moved.
+    anomalies: tuple[Anomaly, ...] = ()
 
 
 class FeedItemStatus(StrEnum):

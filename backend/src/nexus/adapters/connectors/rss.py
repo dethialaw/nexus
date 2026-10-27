@@ -24,7 +24,13 @@ from nexus.core.ingestion.entities import (
 from nexus.core.ingestion.errors import CollectionError
 from nexus.core.ingestion.normalization import normalize_batch
 from nexus.core.ingestion.source_config import RssConfig
-from nexus.core.shared.ports import FetchError, FetchUsage, HttpFetcher, HttpValidators
+from nexus.core.shared.ports import (
+    FetchError,
+    FetchResponse,
+    FetchUsage,
+    HttpFetcher,
+    HttpValidators,
+)
 
 
 class RssConnector:
@@ -55,10 +61,15 @@ class RssConnector:
                         else response.validators.last_modified
                     ),
                 ),
+                anomalies=_moved(config.feed_url, response),
             )
         if not 200 <= response.status < 300:
             raise CollectionError(f"HTTP {response.status}")
-        return replace(parse_feed(response.body, config.feed_url), validators=response.validators)
+        return replace(
+            parse_feed(response.body, config.feed_url),
+            validators=response.validators,
+            anomalies=_moved(config.feed_url, response),
+        )
 
 
 async def check_feed(
@@ -77,16 +88,7 @@ async def check_feed(
         response = await fetcher.fetch(config.feed_url, FetchUsage.FEED)
     except FetchError as error:
         raise CollectionError(str(error)) from error
-    anomalies = (
-        (
-            Anomaly(
-                AnomalyKind.FEED_MOVED,
-                f"{config.feed_url} moved permanently to {response.final_url}",
-            ),
-        )
-        if response.moved_permanently
-        else ()
-    )
+    anomalies = _moved(config.feed_url, response)
     if response.status == 304:
         batch = RawArticleBatch(raw_articles=(), unreadable_count=0, base_url=config.feed_url)
     elif 200 <= response.status < 300:
@@ -123,6 +125,14 @@ async def check_feed(
         unreadable_count=batch.unreadable_count,
         excluded_count=sum(item.status is FeedItemStatus.EXCLUDED for item in items),
         anomalies=anomalies,
+    )
+
+
+def _moved(feed_url: str, response: FetchResponse) -> tuple[Anomaly, ...]:
+    if not response.moved_permanently:
+        return ()
+    return (
+        Anomaly(AnomalyKind.FEED_MOVED, f"{feed_url} moved permanently to {response.final_url}"),
     )
 
 
