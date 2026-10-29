@@ -63,10 +63,9 @@ class RssConnector:
                 ),
                 anomalies=_moved(config.feed_url, response),
             )
-        if not 200 <= response.status < 300:
-            raise CollectionError(f"HTTP {response.status}")
+        batch = _read_response(response, config.feed_url)
         return replace(
-            parse_feed(response.body, config.feed_url),
+            batch,
             validators=response.validators,
             anomalies=_moved(config.feed_url, response),
         )
@@ -91,10 +90,8 @@ async def check_feed(
     anomalies = _moved(config.feed_url, response)
     if response.status == 304:
         batch = RawArticleBatch(raw_articles=(), unreadable_count=0, base_url=config.feed_url)
-    elif 200 <= response.status < 300:
-        batch = parse_feed(response.body, config.feed_url)
     else:
-        raise CollectionError(f"HTTP {response.status}")
+        batch = _read_response(response, config.feed_url)
     source = Source(
         id=0,
         source_key=config.source_key,
@@ -126,6 +123,20 @@ async def check_feed(
         excluded_count=sum(item.status is FeedItemStatus.EXCLUDED for item in items),
         anomalies=anomalies,
     )
+
+
+def _read_response(response: FetchResponse, feed_url: str) -> RawArticleBatch:
+    """Parse a 2xx response; a failure after a permanent redirect also names the new URL."""
+    try:
+        if not 200 <= response.status < 300:
+            raise CollectionError(f"HTTP {response.status}")
+        return parse_feed(response.body, feed_url)
+    except CollectionError as error:
+        if not response.moved_permanently:
+            raise
+        raise CollectionError(
+            f"{error} (feed moved permanently from {feed_url} to {response.final_url})"
+        ) from error
 
 
 def _moved(feed_url: str, response: FetchResponse) -> tuple[Anomaly, ...]:

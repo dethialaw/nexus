@@ -81,6 +81,26 @@ async def test_check_shows_the_cause_of_a_refusal(
 
 
 @pytest.mark.usefixtures("no_database_configuration")
+async def test_check_shows_the_new_url_when_parsing_fails_after_a_permanent_redirect(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        if request.url.path == "/feed.xml":
+            return httpx2.Response(301, headers={"location": "https://example.com/home"})
+        return httpx2.Response(200, content=b"<html></html>")
+
+    serve(monkeypatch, handler)
+
+    code = await admin.run(["source", "check", FEED_URL])
+
+    err = capsys.readouterr().err
+    assert code == 1
+    assert "not a feed" in err
+    assert FEED_URL in err
+    assert "https://example.com/home" in err
+
+
+@pytest.mark.usefixtures("no_database_configuration")
 async def test_check_refuses_an_http_url_without_any_request(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
