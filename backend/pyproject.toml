@@ -5,16 +5,16 @@ description = "Personal news-watch assistant: daily Briefing built from an inter
 readme = "AGENTS.md"
 requires-python = ">=3.13"
 dependencies = [
-    "alembic>=1.16",
+    "alembic>=1.20.1",
     "asyncpg>=0.30",
-    "fastapi>=0.149.0",
+    "fastapi>=0.162.0",
     "feedparser>=6.0.14",
-    "httpx2>=2.14.0",
+    "httpx2>=2.16.0",
     "numpy>=2.2",
     "pgvector>=0.4",
     "pydantic>=2.11",
-    "pydantic-settings>=2.10",
-    "sqlalchemy[asyncio]>=2.1.5",
+    "pydantic-settings>=2.16.1",
+    "sqlalchemy[asyncio]>=2.1.6",
     "tzdata>=2026.5",
     "uvicorn[standard]>=0.54.0",
 ]
@@ -29,13 +29,13 @@ dev = [
     "import-linter>=2.3",
     "mypy>=1.18",
     "pytest>=8.4",
-    "pytest-asyncio>=1.2",
-    "ruff>=0.17.1",
+    "pytest-asyncio>=1.4.1",
+    "ruff>=0.17.2",
 ]
 evals = []
 
 [build-system]
-requires = ["uv_build>=0.13.1,<0.14.0"]
+requires = ["uv_build>=0.13.5,<0.14.0"]
 build-backend = "uv_build"
 
 [tool.uv]
