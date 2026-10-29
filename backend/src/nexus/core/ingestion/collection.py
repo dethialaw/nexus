@@ -22,6 +22,7 @@ class CollectionOutcome:
     """A recorded Collection, plus the counts the batch summary shows without storing them."""
 
     collection: SourceCollection
+    source_key: str
     unreadable_count: int = 0
     excluded_count: int = 0
     deactivated: bool = False
@@ -68,7 +69,11 @@ async def collect_source(
             if deactivated:
                 deactivated = await uow.sources.deactivate_for_repeated_failures(source.id)
             await uow.commit()
-        return CollectionOutcome(collection=failed, deactivated=deactivated)
+        return CollectionOutcome(
+            collection=failed,
+            source_key=source.source_key,
+            deactivated=deactivated,
+        )
 
     articles, excluded_count = normalize_batch(batch, source, started_at)
     async with uow:
@@ -89,6 +94,7 @@ async def collect_source(
         await uow.commit()
     return CollectionOutcome(
         collection=collection,
+        source_key=source.source_key,
         unreadable_count=batch.unreadable_count,
         excluded_count=excluded_count,
         anomalies=batch.anomalies,

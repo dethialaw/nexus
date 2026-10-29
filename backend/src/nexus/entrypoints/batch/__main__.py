@@ -39,7 +39,7 @@ def render_summary(report: ExecutionReport) -> str:
     for outcome in report.collections:
         collection = outcome.collection
         line = (
-            f"- source {collection.source_id}: {collection.result}, "
+            f"- source {outcome.source_key}: {collection.result}, "
             f"{collection.article_count} new Articles, "
             f"{outcome.unreadable_count} unreadable items, "
             f"{outcome.excluded_count} excluded items"
@@ -58,6 +58,13 @@ def render_summary(report: ExecutionReport) -> str:
     return "\n".join(lines) + "\n"
 
 
+def render_technical_failure(error: Exception) -> str:
+    return (
+        "## Execution failed\n\nFailure cause: technical\n\n"
+        f"Error: {type(error).__name__}: {error}\n"
+    )
+
+
 def write_summary(summary: str) -> None:
     path = os.environ.get("GITHUB_STEP_SUMMARY")
     if path:
@@ -74,18 +81,25 @@ async def run(container: Container | None = None) -> int:
             write_summary(f"## {PREVIOUS_EXECUTION_RUNNING}\n")
             return 0
         try:
-            report = await run_execution(
-                container.uow_factory,
-                container.clock,
-                container.source_catalog,
-                container.connectors,
-            )
+            try:
+                report = await run_execution(
+                    container.uow_factory,
+                    container.clock,
+                    container.source_catalog,
+                    container.connectors,
+                )
+            except Exception as error:
+                summary = render_technical_failure(error)
+                code = 1
+            else:
+                summary = render_summary(report)
+                code = exit_code(report)
         finally:
             await container.execution_lock.release()
     finally:
         await container.dispose()
-    write_summary(render_summary(report))
-    return exit_code(report)
+    write_summary(summary)
+    return code
 
 
 def main() -> None:

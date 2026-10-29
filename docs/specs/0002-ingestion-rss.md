@@ -117,7 +117,7 @@ Ordre : verrou, synchronisation du Catalogue, Collectes, purge, clôture.
   - `source_deactivated` : une Source vient d'être désactivée pour échecs répétés ;
   - `feed_moved` : un flux a répondu par une redirection permanente, avec l'ancienne et la nouvelle URL.
 - **Purge** : s'exécute même si les Collectes ont échoué.
-- **Résumé** : écrit dans `$GITHUB_STEP_SUMMARY` quand la variable existe, et dans le journal sinon. Il donne le résultat, chaque Collecte (Articles insérés, éléments illisibles, éléments exclus, erreur), les anomalies, les configs mises à jour par la synchronisation (information, pas anomalie) et la version d'expat.
+- **Résumé** : écrit dans `$GITHUB_STEP_SUMMARY` quand la variable existe, et dans le journal sinon. Il donne le résultat, chaque Collecte (Source nommée par son `source_key`, Articles insérés, éléments illisibles, éléments exclus, erreur), les anomalies, les configs mises à jour par la synchronisation (information, pas anomalie) et la version d'expat. Une Exécution échouée techniquement affiche aussi la cause et l'erreur.
 - **Code de sortie** : non nul si l'Exécution est `failed`, si une Source a été désactivée ou si la synchronisation est bloquée ; 0 dans tous les autres cas, `partial`, `feed_moved` et `no_source_to_collect` compris.
 
 ### Synchronisation du Catalogue

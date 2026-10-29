@@ -50,6 +50,7 @@ async def test_subscribed_active_sources_are_collected_into_articles() -> None:
     assert harness.sources.rows["rss:a.example.com/feed"].last_collected_at is not None
     assert report.execution.result is ExecutionResult.SUCCESS
     assert report.execution.anomalies == ()
+    assert [outcome.source_key for outcome in report.collections] == ["rss:a.example.com/feed"]
 
 
 async def test_collection_stores_response_validators() -> None:
