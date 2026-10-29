@@ -1,6 +1,6 @@
 # One image, two commands: the API by default, `nexus-batch` by overriding the command.
 
-FROM ghcr.io/astral-sh/uv:0.13.5-python3.14-trixie-slim AS build
+FROM ghcr.io/astral-sh/uv:0.13.6-python3.14-trixie-slim AS build
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=0
 WORKDIR /app
 COPY pyproject.toml uv.lock ./
