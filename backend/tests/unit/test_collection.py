@@ -100,6 +100,40 @@ async def test_a_permanent_redirect_is_an_anomaly_with_both_urls(response: Fetch
     assert FEED_B in anomaly.detail
 
 
+@pytest.mark.parametrize(
+    ("response", "cause"),
+    [
+        (ok(b"<!DOCTYPE html><html></html>", url=FEED_B, moved_permanently=True), "DOCTYPE"),
+        (ok(b"<html></html>", url=FEED_B, moved_permanently=True), "not a feed"),
+        (ok(b"", 404, FEED_B, moved_permanently=True), "HTTP 404"),
+    ],
+)
+async def test_a_failure_after_a_permanent_redirect_names_both_urls(
+    response: FetchResponse, cause: str
+) -> None:
+    harness = Harness(rss_source(1, FEED_A), subscribed=[1])
+    harness.serve(FEED_A, response)
+
+    await harness.run()
+
+    [collection] = harness.collections.rows
+    assert collection.result is CollectionResult.FAILED
+    assert collection.error_detail is not None
+    assert cause in collection.error_detail
+    assert FEED_A in collection.error_detail
+    assert FEED_B in collection.error_detail
+
+
+async def test_a_failure_without_a_permanent_redirect_keeps_its_cause() -> None:
+    harness = Harness(rss_source(1, FEED_A), subscribed=[1])
+    harness.serve(FEED_A, ok(b"", 404, FEED_B))
+
+    await harness.run()
+
+    [collection] = harness.collections.rows
+    assert collection.error_detail == "HTTP 404"
+
+
 async def test_inactive_or_unsubscribed_sources_are_not_collected() -> None:
     harness = Harness(
         rss_source(1, FEED_A),
