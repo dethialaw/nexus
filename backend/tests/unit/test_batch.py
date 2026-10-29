@@ -97,14 +97,22 @@ async def test_summary_goes_to_the_step_summary_file(
     fixed = report(
         ExecutionResult.FAILED,
         "feed_moved",
-        collections=(CollectionOutcome(collection, unreadable_count=2, excluded_count=3),),
+        collections=(
+            CollectionOutcome(
+                collection,
+                source_key="rss:example.org/feed",
+                unreadable_count=2,
+                excluded_count=3,
+            ),
+        ),
     )
 
     await run_batch(monkeypatch, fixed)
 
     text = target.read_text()
     assert "failed" in text
-    assert "source 7" in text
+    assert "source rss:example.org/feed" in text
+    assert "source 7" not in text
     assert "0 new Articles, 2 unreadable items, 3 excluded items, error: boom" in text
     assert "feed_moved: detail of feed_moved" in text
     assert "rss:example.org/feed" in text
@@ -121,6 +129,34 @@ async def test_summary_goes_to_the_log_without_step_summary(
 
     assert EXPAT_VERSION in caplog.text
     assert "Execution 1: success" in caplog.text
+
+
+async def test_technical_failure_is_summarized_and_exits_nonzero(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    target = tmp_path / "summary.md"
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(target))
+
+    async def fail(*_: Any) -> ExecutionReport:
+        raise RuntimeError("database gone")
+
+    monkeypatch.setattr(batch, "run_execution", fail)
+    lock = FakeLock()
+    container = FakeContainer(
+        uow_factory=None,
+        clock=None,
+        source_catalog=None,
+        connectors={},
+        execution_lock=lock,
+    )
+
+    code = await batch.run(container)  # type: ignore[arg-type]
+
+    assert code != 0
+    assert lock.released
+    assert container.disposed
+    assert "failed" in target.read_text()
+    assert "RuntimeError: database gone" in target.read_text()
 
 
 async def test_a_held_lock_creates_no_execution_and_exits_with_zero(
