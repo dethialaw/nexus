@@ -75,6 +75,7 @@ class SourceRow(Base):
     last_collected_at: Mapped[datetime | None] = mapped_column(Timestamp)
     http_etag: Mapped[str | None] = mapped_column(Text)
     http_last_modified: Mapped[str | None] = mapped_column(Text)
+    reactivated_at: Mapped[datetime | None] = mapped_column(Timestamp)
 
 
 class ArticleRow(Base):

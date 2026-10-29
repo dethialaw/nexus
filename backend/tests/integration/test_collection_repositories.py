@@ -218,6 +218,38 @@ async def test_recent_results_are_the_latest_first_and_limited(
     assert recent == (CollectionResult.FAILED, CollectionResult.SUCCESS)
 
 
+async def test_recent_results_since_a_date_ignore_older_collections(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    source = source_row("a")
+    execution = ExecutionRow(started_at=NOW, anomalies=[])
+    await add(session_factory, source, execution)
+    history = [
+        (NOW - timedelta(hours=2), CollectionResult.FAILED),
+        (NOW, CollectionResult.FAILED),
+        (NOW + timedelta(hours=1), CollectionResult.SUCCESS),
+    ]
+    async with SqlUnitOfWork(session_factory) as uow:
+        for started_at, result in history:
+            await uow.collections.add(
+                SourceCollection(
+                    execution_id=execution.id,
+                    source_id=source.id,
+                    result=result,
+                    article_count=0,
+                    error_detail=None,
+                    started_at=started_at,
+                    finished_at=started_at,
+                )
+            )
+        await uow.commit()
+
+    async with SqlUnitOfWork(session_factory) as uow:
+        recent = await uow.collections.recent_results(source.id, 24, since=NOW)
+
+    assert recent == (CollectionResult.SUCCESS,)
+
+
 async def test_purge_collected_before_deletes_expired_articles_and_leaves_traces(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:

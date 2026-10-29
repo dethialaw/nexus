@@ -1,5 +1,7 @@
 """Collections (`source_collection`)."""
 
+from datetime import datetime
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,14 +28,16 @@ class SqlCollectionRepository:
         )
         await self._session.flush()
 
-    async def recent_results(self, source_id: int, limit: int) -> tuple[CollectionResult, ...]:
+    async def recent_results(
+        self, source_id: int, limit: int, since: datetime | None = None
+    ) -> tuple[CollectionResult, ...]:
+        query = select(SourceCollectionRow.result).where(
+            SourceCollectionRow.source_id == source_id,
+            SourceCollectionRow.result.is_not(None),
+        )
+        if since is not None:
+            query = query.where(SourceCollectionRow.started_at > since)
         results = await self._session.scalars(
-            select(SourceCollectionRow.result)
-            .where(
-                SourceCollectionRow.source_id == source_id,
-                SourceCollectionRow.result.is_not(None),
-            )
-            .order_by(SourceCollectionRow.id.desc())
-            .limit(limit)
+            query.order_by(SourceCollectionRow.id.desc()).limit(limit)
         )
         return tuple(CollectionResult(result) for result in results if result is not None)

@@ -85,6 +85,11 @@ class Harness:
         self.fetcher = FakeHttpFetcher()
         self.clock = FakeClock()
 
+    def uow(self) -> InMemoryUnitOfWork:
+        return InMemoryUnitOfWork(
+            self.executions, self.sources, self.articles, self.collections, self.purge_traces
+        )
+
     def serve(self, url: str, response: FetchResponse | FetchError) -> None:
         self.fetcher.responses[url] = response
 
@@ -98,13 +103,7 @@ class Harness:
             else sources
         )
         return await run_execution(
-            lambda: InMemoryUnitOfWork(
-                self.executions,
-                self.sources,
-                self.articles,
-                self.collections,
-                self.purge_traces,
-            ),
+            self.uow,
             self.clock,
             FakeSourceCatalog(listed, **catalog),
             {Connector.RSS: RssConnector(self.fetcher)},

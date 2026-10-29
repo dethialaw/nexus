@@ -126,10 +126,12 @@ class InMemorySourceRepository:
                 return True
         return False
 
-    async def reactivate(self, source_id: int) -> bool:
+    async def reactivate(self, source_id: int, reactivated_at: datetime) -> bool:
         for key, source in self.rows.items():
             if source.id == source_id and not source.is_active:
-                self.rows[key] = replace(source, deactivation_reason=None)
+                self.rows[key] = replace(
+                    source, deactivation_reason=None, reactivated_at=reactivated_at
+                )
                 return True
         return False
 
@@ -219,8 +221,14 @@ class InMemoryCollectionRepository:
     async def add(self, collection: SourceCollection) -> None:
         self.rows.append(collection)
 
-    async def recent_results(self, source_id: int, limit: int) -> tuple[CollectionResult, ...]:
-        own = [row.result for row in self.rows if row.source_id == source_id]
+    async def recent_results(
+        self, source_id: int, limit: int, since: datetime | None = None
+    ) -> tuple[CollectionResult, ...]:
+        own = [
+            row.result
+            for row in self.rows
+            if row.source_id == source_id and (since is None or row.started_at > since)
+        ]
         return tuple(reversed(own[-limit:]))
 
 
