@@ -24,6 +24,7 @@ def source_to_domain(row: SourceRow) -> Source:
         ),
         last_collected_at=row.last_collected_at,
         validators=HttpValidators(etag=row.http_etag, last_modified=row.http_last_modified),
+        reactivated_at=row.reactivated_at,
     )
 
 
@@ -74,11 +75,11 @@ class SqlSourceRepository:
         )
         return bool(result.rowcount)  # type: ignore[attr-defined]
 
-    async def reactivate(self, source_id: int) -> bool:
+    async def reactivate(self, source_id: int, reactivated_at: datetime) -> bool:
         result = await self._session.execute(
             update(SourceRow)
             .where(SourceRow.id == source_id, SourceRow.is_active.is_(False))
-            .values(is_active=True, deactivation_reason=None)
+            .values(is_active=True, deactivation_reason=None, reactivated_at=reactivated_at)
         )
         return bool(result.rowcount)  # type: ignore[attr-defined]
 

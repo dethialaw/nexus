@@ -79,6 +79,8 @@ class Source:
     deactivation_reason: DeactivationReason | None
     last_collected_at: datetime | None
     validators: HttpValidators = field(default_factory=HttpValidators)
+    # Failures before the last `source reactivate` no longer count towards deactivation.
+    reactivated_at: datetime | None = None
 
     @property
     def is_active(self) -> bool:

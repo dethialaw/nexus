@@ -61,7 +61,9 @@ async def collect_source(
         )
         async with uow:
             await uow.collections.add(failed)
-            recent = await uow.collections.recent_results(source.id, MAX_CONSECUTIVE_FAILURES)
+            recent = await uow.collections.recent_results(
+                source.id, MAX_CONSECUTIVE_FAILURES, since=source.reactivated_at
+            )
             deactivated = len(recent) == MAX_CONSECUTIVE_FAILURES and all(
                 result is CollectionResult.FAILED for result in recent
             )

@@ -73,8 +73,8 @@ class SourceRepository(Protocol):
         """Deactivate an active Source (`repeated_failures`); False when already inactive."""
         ...
 
-    async def reactivate(self, source_id: int) -> bool:
-        """Reactivate an inactive Source; False when it was already active."""
+    async def reactivate(self, source_id: int, reactivated_at: datetime) -> bool:
+        """Reactivate an inactive Source, recording when; False when it was already active."""
         ...
 
 
@@ -101,8 +101,10 @@ class PurgeTraceRepository(Protocol):
 class CollectionRepository(Protocol):
     async def add(self, collection: SourceCollection) -> None: ...
 
-    async def recent_results(self, source_id: int, limit: int) -> tuple[CollectionResult, ...]:
-        """Results of the last Collections of a Source, the most recent first."""
+    async def recent_results(
+        self, source_id: int, limit: int, since: datetime | None = None
+    ) -> tuple[CollectionResult, ...]:
+        """Results of the last Collections of a Source started after `since`, latest first."""
         ...
 
 

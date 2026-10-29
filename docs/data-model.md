@@ -32,6 +32,7 @@
 | `last_collected_at` | timestamptz NULL | sert de `since` au Connecteur |
 | `http_etag` | text NULL | validateur `ETag` de la dernière réponse, renvoyé en requête conditionnelle |
 | `http_last_modified` | text NULL | validateur `Last-Modified` de la dernière réponse |
+| `reactivated_at` | timestamptz NULL | date du dernier `nexus-admin source reactivate` ; seules les Collectes commencées après comptent pour la désactivation après échecs répétés |
 
 **`article`**
 | Colonne | Type | Notes |

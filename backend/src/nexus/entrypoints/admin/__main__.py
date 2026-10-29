@@ -111,7 +111,7 @@ async def _dispatch(args: argparse.Namespace, container: Container) -> None:
         )
         print(f"user {user.handle}: timezone {user.timezone}, briefing at {user.briefing_hour}h")
     elif args.command == "source":
-        changed = await reactivate_source(container.uow_factory(), args.source_key)
+        changed = await reactivate_source(container.uow_factory(), container.clock, args.source_key)
         print(f"{'reactivated' if changed else 'already active'}: {args.source_key}")
     elif args.command == "subscribe":
         change = await subscribe(

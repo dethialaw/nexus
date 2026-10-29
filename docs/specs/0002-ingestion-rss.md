@@ -142,7 +142,7 @@ Les quatre règles de la spec 0001 restent valables. S'y ajoutent :
 - **Échec** : erreur réseau, délai dépassé, réponse non 2xx après redirections (429 et 503 compris, sans nouvel essai dans l'Exécution), redirection de HTTPS vers HTTP, refus du filtre préalable, flux illisible, ou flux dont les éléments sont tous illisibles.
 - **Réussite** : flux vide, flux sans nouveauté, 304, flux dont tous les éléments sont exclus. Un élément exclu n'est jamais un élément illisible.
 - **Transaction** : une par Collecte. La Collecte, ses Articles, `last_collected_at` et les validateurs sont enregistrés ensemble ou pas du tout. `last_collected_at` n'est mis à jour qu'en cas de réussite et ne sert pas de filtre.
-- **Échecs répétés** : après 24 Collectes échouées d'affilée, comptées depuis l'historique des Collectes, la Source est désactivée (`repeated_failures`) et l'anomalie `source_deactivated` est inscrite. Seul `nexus-admin source reactivate` la rallume ; la synchronisation du Catalogue ne réactive que `removed_from_catalog`.
+- **Échecs répétés** : après 24 Collectes échouées d'affilée, comptées depuis l'historique des Collectes, la Source est désactivée (`repeated_failures`) et l'anomalie `source_deactivated` est inscrite. Seul `nexus-admin source reactivate` la rallume, en enregistrant la date de réactivation : seules les Collectes commencées après cette date comptent ensuite, et la Source repart de zéro. La synchronisation du Catalogue ne réactive que `removed_from_catalog`.
 
 ### Récupération web (`HttpFetcher`)
 

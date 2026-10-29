@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -187,12 +189,16 @@ async def test_reactivate_only_touches_inactive_sources(
 
     async with SqlUnitOfWork(session_factory) as uow:
         changed = [
-            await uow.sources.reactivate(rows["reddit:python"].id),
-            await uow.sources.reactivate(rows["reddit:rust"].id),
-            await uow.sources.reactivate(rows["reddit:rust"].id),
+            await uow.sources.reactivate(rows["reddit:python"].id, NOW),
+            await uow.sources.reactivate(rows["reddit:rust"].id, NOW),
+            await uow.sources.reactivate(rows["reddit:rust"].id, NOW + timedelta(hours=1)),
         ]
         await uow.commit()
 
     rows = await rows_by_key(session_factory)
     assert changed == [False, True, False]
     assert (rows["reddit:rust"].is_active, rows["reddit:rust"].deactivation_reason) == (True, None)
+    async with SqlUnitOfWork(session_factory) as uow:
+        rust = await uow.sources.get_by_key("reddit:rust")
+        python = await uow.sources.get_by_key("reddit:python")
+    assert (rust and rust.reactivated_at, python and python.reactivated_at) == (NOW, None)
