@@ -229,7 +229,7 @@ Dix flux, tous vérifiés le 16 octobre 2026 : HTTPS, XML valide, sans redirecti
 | | The Verge | `https://www.theverge.com/rss/index.xml` | Atom ; ETag envoyé mais ignoré |
 | | Ars Technica | `https://arstechnica.com/feed/` | |
 | | Hacker News (hnrss) | `https://hnrss.org/frontpage` | dépendance temporaire, retirée à l'arrivée du Connecteur Hacker News |
-| Sénégal | APS | `https://aps.sn/feed/` | flux général ; entités échappées deux fois |
+| Sénégal | APS | `https://aps.sn/category/actualites/feed/` | rubrique Actualités, 10 éléments ; remplace le flux général `/feed/`, redirigé vers la page d'accueil (constaté le 29 octobre 2026) ; entités échappées deux fois |
 | | Seneweb | `https://www.seneweb.com/feed` | préféré à Dakaractu (flux plus propre et plus fiable) |
 | | RFI Afrique | `https://www.rfi.fr/fr/afrique/rss` | éléments non triés |
 

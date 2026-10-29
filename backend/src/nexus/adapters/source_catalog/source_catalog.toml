@@ -52,7 +52,8 @@ feed_url = "https://hnrss.org/frontpage"
 
 [[source]]
 connector = "rss"
-feed_url = "https://aps.sn/feed/"
+# The general feed (/feed/) redirects to the HTML home page (found on 2026-10-29).
+feed_url = "https://aps.sn/category/actualites/feed/"
 
 [[source]]
 connector = "rss"
@@ -61,3 +62,8 @@ feed_url = "https://www.seneweb.com/feed"
 [[source]]
 connector = "rss"
 feed_url = "https://www.rfi.fr/fr/afrique/rss"
+
+# --- Retired ---
+
+[[retired]]
+source_key = "rss:aps.sn/feed"
