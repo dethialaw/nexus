@@ -162,7 +162,7 @@ Le refus est une Collecte échouée avec une cause explicite. Aucun des flux vé
 
 **Analyse** : feedparser lit les **octets** reçus par `HttpFetcher`, jamais une URL. RSS 2.0 et Atom.
 
-**Élément lisible** : il a un titre et un lien. Le lien est le `link`, ou à défaut le `guid` s'il est une URL. Un élément sans titre ou sans lien est illisible.
+**Élément lisible** : il a un titre et un lien. Le lien est le `link`, s'il mène à une URL `http` ou `https` une fois résolu par rapport à l'URL du flux ; à défaut, le `guid` s'il est une URL `http` ou `https`. Un élément sans titre ou sans lien est illisible : un lien `javascript:`, `data:` ou `ftp:` ne compte pas, car l'Article serait affiché comme un lien cliquable.
 
 ### Article brut → Article (normalisation dans le cœur)
 

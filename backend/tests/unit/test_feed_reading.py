@@ -236,6 +236,7 @@ def test_a_feed_whose_items_are_all_unreadable_is_refused() -> None:
             "https://www.Example.com/A/B?id=7",
         ),
         ("http://example.com/a?utm_source=x", "http://example.com/a"),
+        ("//cdn.example.com/a", "https://cdn.example.com/a"),
     ],
 )
 def test_canonical_url(link: str, expected: str) -> None:
@@ -269,6 +270,31 @@ def test_items_without_title_or_link_are_unreadable() -> None:
         2,
         0,
     )
+
+
+@pytest.mark.parametrize(
+    "link",
+    [
+        "javascript:alert(1)",
+        "  JaVaScRiPt:alert(1)",
+        "java&#9;script:alert(1)",
+        "data:text/html,x",
+        "ftp://example.com/a",
+        "mailto:someone@example.com",
+    ],
+)
+def test_a_link_that_is_not_http_or_https_makes_the_item_unreadable(link: str) -> None:
+    articles, unreadable, _ = read_counted(
+        rss(item(link=link), item(link="https://example.com/ok"))
+    )
+
+    assert ([a.canonical_url for a in articles], unreadable) == (["https://example.com/ok"], 1)
+
+
+def test_a_web_guid_replaces_a_link_that_is_not_http_or_https() -> None:
+    body = rss("<title>A</title><link>javascript:alert(1)</link><guid>https://example.com/g</guid>")
+
+    assert [a.canonical_url for a in read(body)] == ["https://example.com/g"]
 
 
 def test_excerpt_is_plain_text_with_entities_decoded_even_when_escaped_twice() -> None:
