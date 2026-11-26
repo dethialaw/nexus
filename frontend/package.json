@@ -18,23 +18,23 @@
     "gen:api": "cd ../backend && uv run python -m nexus.entrypoints.api.export_openapi > ../frontend/src/lib/api/openapi.json && cd ../frontend && openapi-typescript src/lib/api/openapi.json -o src/lib/api/schema.d.ts && prettier --write src/lib/api"
   },
   "dependencies": {
-    "next": "16.4.2",
+    "next": "16.4.6",
     "openapi-fetch": "^0.17.0",
     "react": "19.3.1",
     "react-dom": "19.3.1"
   },
   "devDependencies": {
     "@tailwindcss/turbopack": "^4",
-    "@testing-library/jest-dom": "^7",
+    "@testing-library/jest-dom": "^8",
     "@testing-library/react": "^16",
     "@types/node": "^26",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^6",
     "eslint": "^10",
-    "eslint-config-next": "16.4.2",
+    "eslint-config-next": "16.4.6",
     "eslint-config-prettier": "^10",
-    "jsdom": "^30",
+    "jsdom": "^31",
     "openapi-typescript": "^7.13.0",
     "prettier": "^3",
     "tailwindcss": "^4",
